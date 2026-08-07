@@ -72,8 +72,8 @@ live components in the page.
 
 ```bash
 # 1. Clone your repository
-git clone <your-repo-url>
-cd <your-repo>/frontend
+git clone https://github.com/jawuku/clojure-webdev-course
+cd clojure-webdev-course/frontend
 
 # 2. Install dependencies (use yarn, not npm)
 yarn install
