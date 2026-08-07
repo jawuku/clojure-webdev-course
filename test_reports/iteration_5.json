@@ -1,0 +1,36 @@
+{
+  "summary": "Verified React 17 -> React 18 + ReactDOM.createRoot upgrade in the ClojureScript live-Reagent sandbox. All live Reagent previews (Hiccup, hiccup-from-data, state-atom counter, events-forms, todo-capstone) render, are reactive, and reuse a single root per preview across re-runs. ZERO React deprecation warnings, ZERO 'createRoot already called' warnings, ZERO console errors/warnings/pageerrors across the entire run. Plain snippet-run regression also clean.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "detailed_results": {
+    "runtime_env": "PASS — After switching to Web Dev course, window.React.version = '18.3.1', typeof window.ReactDOM.createRoot === 'function', window.scittle.core present. reagentReady() resolved on first poll.",
+    "hiccup_intro_live_render": "PASS — Lesson index 9 (hiccup-intro) auto-renders 2 [data-testid='reagent-preview'] nodes. Preview[0] innerText: 'Hello, Hiccup!\\n\\nThis is real HTML, described as a Clojure vector.\\n\\nEverything you know about vectors applies here.'  Preview[1] innerText: 'Styled with data\\n\\nThe style attribute is a map of CSS properties.'  0 reagent-error nodes.",
+    "rerun_in_place_root_reuse": "PASS — Clicked [data-testid='reagent-run'] twice on hiccup-intro. 0 new console messages triggered by the re-runs; 0 'already been passed to createRoot' warnings. Confirms the __reagent_roots atom-based root reuse in sci.js renderReagent() is working.",
+    "state_atom_reactivity": "PASS — Lesson index 13 (state-atom) preview initial 'Count: 0 + - reset'. Two clicks on '+' -> 'Count: 2 + - reset'. Click 'reset' -> 'Count: 0 + - reset'. Full atom reactivity intact through React 18 + reagent.core/as-element. 0 reagent-error.",
+    "events_forms_reactivity": "PASS — Lesson index 14 (events-forms) preview initial 'Start typing above…'. After filling input with 'Ada' the preview live-updated to 'Hello, Ada!'. 0 reagent-error.",
+    "todo_capstone_flow": "PASS — Lesson index 16 (todo-capstone) preview initial '1 of 2 done' with 2 li items. After typing 'Learn Reagent' and clicking Add, li count -> 3, last li text 'Learn Reagent\\ndelete', footer -> '1 of 3 done'. Toggling the pre-checked checkbox flipped footer to '0 of 3 done'. Checkbox state and derived count both update. 0 reagent-error.",
+    "multiple_previews_independence": "PASS — Lesson index 10 (hiccup-from-data) rendered 3 distinct previews: [0]='apple\\npear\\nplum\\ncherry', [1]='Ada\\tPioneer\\nAlan\\tLogician\\nRich\\tClojure\\'s creator', [2]='Dashboard\\n\\nWelcome back!'. All three coexist with independent, correct content -> per-mount-id createRoot registry is scoping roots correctly.",
+    "plain_snippet_regression": "PASS — Lesson index 6 [data-testid='snippet-run'] -> [data-testid='snippet-result'] = '=> (\"APPLE\" \"PEAR\" \"PLUM\")'. 0 [data-testid='snippet-error']. SCI eval path unaffected by the Reagent React 18 upgrade.",
+    "console_diagnostics": "0 errors, 0 warnings, 0 pageerror events during the whole flow. Only 2 benign console.info messages, both the standard React DevTools nudge: '%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold'. NO 'ReactDOM.render is no longer supported' warning. NO 'You are calling ReactDOMClient.createRoot() on a container that has already been passed to createRoot() before' warning."
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "renderReagent() in src/lib/sci.js correctly creates the root once per mount id via a defonce'd __reagent_roots atom and re-uses it on subsequent .render calls — this is the right pattern for React 18 + Reagent-as-element and directly explains the absence of the double-createRoot warning.",
+    "reagentReady() now gates on window.ReactDOM.createRoot being a function AND reagent.core being requireable via Scittle — good defensive check for the CDN load-order.",
+    "Minor: __reagent_roots roots are never explicitly .unmount()'ed when ReagentSnippet unmounts. In the current app this is harmless because previews live for the lifetime of the page/lesson view; but if the routing model ever destroys the mount element, the retained root would hold a stale DOM ref. Consider a useEffect cleanup that calls (some-> root .unmount) via a small exposed helper.",
+    "The current uid counter for mountId is a module-level number that grows monotonically. Not a bug (each Snippet instance gets a unique id at construction), but be aware it never resets between hot reloads in dev; production is unaffected."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only)", "frontend": "100% (9/9 targeted checks pass)"},
+  "test_credentials": "None required",
+  "seed_data_creation": "localStorage.clear() at run start to guarantee a fresh 0% state and to prevent any prior 100%-complete course-complete overlay from blocking navigation. No persistent seed retained.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "React 18 UMD + ReactDOM.createRoot + reagent.core/as-element rendering path is fully verified and clean. renderReagent() uses a cljs-side (defonce __reagent_roots (atom {})) keyed by mountId, so repeated Run clicks and re-navigation into the same lesson do NOT re-create roots and do NOT emit React deprecation warnings. If any future lesson introduces conditional un-mounting of a preview element, be sure to also .unmount() its stored root before the DOM node is removed, otherwise future re-mounts on a fresh element with the SAME mountId would surface the 'createRoot called twice' warning.",
+  "rca of the issue": "N/A — no issues found. The change under test (React 17 legacy render -> React 18 createRoot + reagent.core/as-element with a per-mount-id root registry) works exactly as designed."
+}

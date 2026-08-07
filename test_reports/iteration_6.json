@@ -1,0 +1,44 @@
+{
+  "summary": "Lightweight REGRESSION verification of the logging-helper refactor (raw console.debug -> dev-only debug() helper in src/lib/log.js used by sci.js, AppContext.jsx, App.js, CourseComplete.jsx). ALL critical flows work with zero regression. 0 console errors, 0 warnings, 0 pageerrors, 0 reagent/snippet errors across the whole run. No debug() calls fired during the happy paths (expected — they are catch-block-only diagnostics).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "detailed_results": {
+    "step1_initial_load": "PASS — App boots on Clojure course. course-switcher-btn text='CourseParens', document.title='Parens — Learn Clojure'. 0 console errors on load.",
+    "step2_course_switch_webdev": "PASS — Click course-switcher-btn -> course-option-webdev. Brand becomes 'CourseHiccup' (i.e. '</> Hiccup' + label), title updates to 'Hiccup — Web Dev with ClojureScript'.",
+    "step3_live_reagent_hiccup": "PASS — Web Dev nav-lesson-9 (Hiccup: HTML as Data): [data-testid='reagent-preview'] auto-renders (2 preview nodes). First preview innerText starts with 'Hello, Hiccup!\\n\\nThis is real HTML, described as a Clojure vector.'  0 [data-testid='reagent-error'].",
+    "step4_reactive_counter": "PASS — Web Dev nav-lesson-13 (State with Reactive Atoms): initial preview 'Count: 0\\n\\n+-reset'. After 2x click on '+' -> 'Count: 2\\n\\n+-reset'. Counter increments reactively. 0 reagent-error. No 'createRoot already called' warning.",
+    "step5_plain_snippet_run": "PASS — [data-testid='snippet-run'] on Web Dev lesson-6 -> [data-testid='snippet-result'] = '=> (\"APPLE\" \"PEAR\" \"PLUM\")'. 0 snippet-error. SCI eval path healthy.",
+    "step6_end_of_clojure_cta": "PASS — Switch to Clojure, open nav-lesson-35 (whats-next). [data-testid='lesson-cta-btn'] present with text 'Start: Web Dev with ClojureScript'. Clicking it flips active course to Web Dev (brand -> CourseHiccup, title -> 'Hiccup — Web Dev with ClojureScript').",
+    "step7_course_complete_celebration": "PASS — Seeded parens_clojure_v1.progress with { lessonId: {done:true} } for all 36 clojure lesson ids (welcome..whats-next), removed __celebrated flag, reloaded. Sidebar shows 'Your progress 100% 36 of 36 lessons complete'. [data-testid='course-complete'] overlay appears with correct copy 'Course complete!' and 'You finished Parens — all 36 lessons done. Beautiful work.' Both [data-testid='course-complete-next'] and [data-testid='course-complete-close'] present. Clicking course-complete-next switches to the Hiccup / Web Dev course (brand -> CourseHiccup) — cross-course handoff works.",
+    "step8_theme_toggle_and_persistence": "PASS — data-theme='kanagawa' initially. Click [data-testid='theme-toggle'] -> data-theme='gruvbox'. Full page reload -> data-theme still 'gruvbox'. Progress storage (parens_clojure_v1) still contains seeded 100% progress after reload. AppContext memoization + localStorage write on [storageKey, themeKey, fontSize, progress, lastLocation] is intact.",
+    "console_diagnostics": "0 console.error, 0 console.warning, 0 pageerror, 0 console.debug across every step. The debug() helper only fires from catch branches, and no catch branch was hit during the happy paths — exactly the intended behavior."
+  },
+  "logging_refactor_verification": {
+    "log_js_shape": "OK — debug(...args) no-ops when process.env.NODE_ENV === 'production', otherwise calls console.debug(...args). Correct guard for CRA-style env inlining.",
+    "call_sites_verified": [
+      "src/lib/sci.js catch blocks: use debug(...)",
+      "src/context/AppContext.jsx localStorage read/write catch: use debug('AppContext: could not read localStorage', e)",
+      "src/App.js and src/components/CourseComplete.jsx catch blocks: use debug(...)"
+    ],
+    "behavioural_impact": "None. Every UX-visible flow (course load, course switch, reagent live render, reactive atom, plain snippet run, CTA hand-off, course-complete overlay, theme+progress persistence) behaves identically to iteration 5."
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "log.js: guard `typeof process !== 'undefined' && process.env && process.env.NODE_ENV === 'production'` is correct for CRA (webpack inlines process.env.NODE_ENV at build time). Good defensive typeof check for any non-CRA runtime paths.",
+    "Consider adding a lightweight `error(...)` companion in log.js for cases where a real console.error is warranted (right now every catch uses debug, which silently drops in production — acceptable for the current diagnostics but worth revisiting if a truly unrecoverable path is ever added).",
+    "Minor: __reagent_roots roots in src/lib/sci.js are still never explicitly .unmount()'d on ReagentSnippet unmount (already flagged in iteration 5). Not caused by this refactor; carrying forward as a note."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only)", "frontend": "100% (8/8 targeted regression checks pass)"},
+  "test_credentials": "None required",
+  "seed_data_creation": "Temporarily wrote localStorage['parens_clojure_v1'] with { themeKey:'kanagawa', fontSize:16, progress:{<all 36 lesson ids>:{done:true, exercises:{}}}, lastLocation:{view:'lesson',lessonId:'welcome'} } to trigger the course-complete overlay. Removed __celebrated key. This is not persisted between runs — the very next test run should re-seed or localStorage.clear().",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Refactor introduced a dev-only debug() helper in src/lib/log.js and swapped all catch-block console.debug(...) calls to it. Regression is clean. If a future change adds new catch sites, either import debug from lib/log.js or use console.error for genuinely unexpected failures. NOTE: the app displays sidebar lesson labels as 1-based (label '10' Hiccup: HTML as Data) but data-testid uses 0-based (nav-lesson-9). Web Dev lesson ids of interest: nav-lesson-9=hiccup-intro, nav-lesson-13=state-atom. Clojure course has 36 lessons; final id is 'whats-next' at nav-lesson-35. Progress in localStorage is keyed by lesson STRING id, not numeric index — the value shape is { done:boolean, exercises:{...} }.",
+  "rca of the issue": "N/A — no issues found."
+}

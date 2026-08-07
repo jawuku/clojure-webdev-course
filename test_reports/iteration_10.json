@@ -1,0 +1,38 @@
+{
+  "summary": "Frontend regression testing after merging the Regex course into the app that already had Clojure and Web Dev courses. All requested flows work end-to-end with zero console errors/warnings. The three-course switcher lists all courses; each course loads its own content, has its own progress and lesson list, and its live execution paths (re-seq snippets for Regex, live Reagent for Web Dev, plain snippet + CTA for Clojure) work. Regex Golf → Leaderboard integration works: submitting #\"(.)\\1\" passes HOLE 1, leaderboard golf-best-double shows 5 and golf-solved becomes 1/4; golf-reset clears back to — and 0/4.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "verified_flows": [
+    "Default load = Clojure course, title 'Parens — Learn Clojure', no console errors",
+    "course-switcher-btn opens course-switcher-menu with course-option-clojure, course-option-webdev, course-option-regex all present",
+    "Switch to Regex: title updates to 'Regex — Master Regular Expressions', sidebar brand shows '.* Regex / Master Regular Expressions', sidebar shows 18 lessons, sections 'Advanced Patterns' and 'Challenge' present",
+    "Regex nav-lesson-1 (find, seq & matches): 4 snippet-run buttons work; the re-seq digits example produces snippet-result => (\"66\" \"99\"), no snippet-error",
+    "Regex Golf (nav-lesson-15): typing #\"(.)\\1\" into exercise-0 editor + exercise-check-0 → 'Solved / All checks passed', localStorage regex_golf_scores_v1 = {\"double\":5}",
+    "Leaderboard (nav-lesson-16): golf-leaderboard renders, golf-best-double = 5, golf-solved = '1/4 holes solved'",
+    "golf-reset clears to golf-best-double = '—' and golf-solved = '0/4 holes solved'",
+    "Switch to Web Dev: brand '</> Hiccup Web Dev with ClojureScript'; 'Hiccup: HTML as Data' lesson renders reagent-preview with content ('Hello, Hiccup!This is real HTML, described as a Clojure vector...'), no reagent-error",
+    "Switch back to Clojure: brand '( ) Parens Learn Clojure'; snippet-run → snippet-result '=> 42', no snippet-error",
+    "nav-lesson-35 (last Clojure lesson): lesson-cta-btn present",
+    "Per-course progress is independent (each course shows its own '0 of N lessons complete' and its own lesson list)",
+    "Console: 0 errors, 0 warnings across all flows (only informational React DevTools tip)"
+  ],
+  "notes_for_e1": [
+    "Testability nit (not a blocker): The Exercise editor does not expose a data-testid (e.g. exercise-editor-0). The task spec implied one. Playwright had to reach into [data-testid=\"exercise-0\"] .cm-content and use keyboard.insert_text to bypass CodeMirror's auto-close-quote behavior when typing #\"(.)\\1\". Consider adding data-testid=\"exercise-editor-<i>\" on the CodeMirror wrapper for easier automation.",
+    "Testability nit: sidebar brand (Regex '.* Regex' / '</> Hiccup' / '( ) Parens') has no data-testid=\"sidebar-brand\"; verified visually and via the first ~80 chars of the sidebar's innerText."
+  ],
+  "critical_code_review_comments": [
+    "No critical issues found for the merge. LessonView 'golf-board' + Exercise -> golf.recordGolfScore + GolfLeaderboard reset flow behaves correctly, and localStorage key 'regex_golf_scores_v1' is written/cleared as expected."
+  ],
+  "test_report_links": [],
+  "updated_files": [],
+  "success_rate": { "backend": "N/A (skipped by request)", "frontend": "100% (10/10 verified flows)" },
+  "seed_data_creation": "None. localStorage was cleared at start of each run.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Course-switch-with-three-courses merge is green. When automating Regex Golf exercises, use page.keyboard.insert_text('#\"(.)\\\\1\"') after Ctrl+A/Backspace inside [data-testid=\"exercise-0\"] .cm-content; page.keyboard.type triggers CodeMirror's auto-close-quote and produces #\"(.)\\1\\\"\" which fails the checks. nav-lesson-N is 0-indexed against the lesson list, so Regex nav-lesson-15 = 'Regex Golf' (sidebar number 16) and nav-lesson-16 = 'Capstone: Golf Leaderboard' (sidebar number 17).",
+  "rca of the issue": "No functional bug. Only an automation caveat documented above."
+}

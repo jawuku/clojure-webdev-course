@@ -1,0 +1,98 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  content-audit:
+    name: Course content audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: Install dependencies (puppeteer downloads Chrome here)
+        working-directory: frontend
+        run: yarn install --frozen-lockfile
+
+      - name: Cache puppeteer browser (skip re-downloading Chrome)
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/puppeteer
+          key: puppeteer-${{ runner.os }}-${{ hashFiles('frontend/yarn.lock') }}
+
+      - name: Start dev server
+        id: start-server
+        working-directory: frontend
+        run: |
+          nohup yarn start > /tmp/webserver.log 2>&1 &
+          for i in $(seq 1 150); do
+            if curl -sf http://localhost:3000 >/dev/null 2>&1; then
+              echo "server up after ~${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "server failed to start"
+          tail -30 /tmp/webserver.log
+          exit 1
+
+      # Each audit exits non-zero on any problem, so these steps fail the build.
+      # The audits run whenever the server is up (even if an earlier audit
+      # failed, so one broken audit does not hide the others), but are skipped
+      # when the server never came up.
+      - name: Audit cheat sheets
+        if: steps.start-server.outcome == 'success'
+        working-directory: frontend
+        env:
+          AUDIT_REPORT: cheat-audit-report.json
+          AUDIT_AUTO_START: "0"
+        run: node scripts/audit-cheatsheet.mjs
+
+      - name: Audit lesson snippets
+        if: steps.start-server.outcome == 'success'
+        working-directory: frontend
+        env:
+          AUDIT_REPORT: snippet-audit-report.json
+          AUDIT_AUTO_START: "0"
+        run: node scripts/audit-snippets.mjs
+
+      - name: Audit exercises
+        if: steps.start-server.outcome == 'success'
+        working-directory: frontend
+        env:
+          AUDIT_REPORT: exercise-audit-report.json
+          AUDIT_AUTO_START: "0"
+        run: node scripts/audit-exercises.mjs
+
+      - name: Audit Reagent blocks
+        if: steps.start-server.outcome == 'success'
+        working-directory: frontend
+        env:
+          AUDIT_REPORT: reagent-audit-report.json
+          AUDIT_AUTO_START: "0"
+        run: node scripts/audit-reagent.mjs
+
+      - name: Stop dev server (best effort)
+        if: always()
+        run: pkill -f "craco start" || true
+
+      - name: Upload audit reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: content-audit-reports
+          path: |
+            frontend/cheat-audit-report.json
+            frontend/snippet-audit-report.json
+            frontend/exercise-audit-report.json
+            frontend/reagent-audit-report.json
+          if-no-files-found: ignore

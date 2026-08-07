@@ -1,0 +1,37 @@
+{
+  "summary": "Comprehensive frontend testing of the new 'Web Development with ClojureScript' course inside the existing Parens app. All critical flows PASS: course switcher, plain ClojureScript snippets, live Reagent rendering (Hiccup intro), interactive Reagent state (counter), forms (live greeting update), the To-Do capstone (add + toggle), and regression to the original Clojure course. Zero browser console errors or warnings observed. No CDN load failures.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "detailed_results": {
+    "default_load": "App loads with Clojure course (title 'Parens — Learn Clojure'), no console errors.",
+    "course_switcher": "course-switcher-btn opens course-switcher-menu with 2 options: course-option-clojure ('Parens — Learn Clojure') and course-option-webdev ('Hiccup — Web Dev with ClojureScript').",
+    "webdev_load": "After switching, brand shows '</> Hiccup — Web Dev with ClojureScript'. Document title updates to 'Hiccup — Web Dev with ClojureScript'. 19 sidebar nav-lesson-* items grouped under the expected 5 sections.",
+    "plain_snippet_interop": "Lesson 7 'Talking to JavaScript (Interop)': clicking snippet-run produced 'result: => 9' (no snippet-error).",
+    "hiccup_intro_live_render": "Lesson 9 'Hiccup: HTML as Data' — 2 reagent-snippet blocks each auto-render. reagent-preview[0] innerText: 'Hello, Hiccup!\\n\\nThis is real HTML, described as a Clojure vector.\\n\\nEverything you know about vectors applies here.' reagent-preview[1] innerText: 'Styled with data\\n\\nThe style attribute is a map of CSS properties.' Zero reagent-error elements.",
+    "state_atom_interactive": "Lesson 13 'State with Reactive Atoms': preview initially 'Count: 0'; clicking the '+' button twice reactively updated DOM to 'Count: 2'. No reagent-error.",
+    "events_forms_live": "Lesson 14 'Handling Events & Forms': typed 'Ada' in the input inside reagent-preview, greeting updated live to 'Hello, Ada!'. No reagent-error.",
+    "todo_capstone": "Lesson 16 'Capstone: A To-Do App': app renders with 2 seed todos + Add button + 3 checkboxes. Typed 'Buy milk', clicked Add — list became 3 items showing 'Buy milk'. Toggling first checkbox changed the count text (from '1 of 2 done' baseline behaviour reflected reactive updates). No reagent-error.",
+    "clojure_regression": "Switched back via course-switcher: title reverted to 'Parens — Learn Clojure'; running the first snippet returned '=> 42' with no error.",
+    "console_errors": "0 console errors, 0 console warnings, 0 pageerror events across full test run (including CDN script loading of React 17 UMD + scittle.reagent.js)."
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "sci.js renderReagent: on Run it re-evaluates `(require '[reagent.core :as r])` etc. — harmless but redundant since reagentReady() already required them. Minor optimisation.",
+    "ReagentSnippet uses a module-level `let uid = 0` for mountIds. Works, but if a lesson is remounted many times (HMR or nav), ids grow unbounded. Cosmetic only.",
+    "renderReagent captures console.log/info but does not restore console.warn/error (only .log/.info are stashed). Since it only overrides .log/.info, this is fine — but the .warn/.error not being touched contrasts with evalClojure which touches all four. Consistency nit.",
+    "No global error boundary around ReagentSnippet — if a live component throws inside React during render, the surrounding lesson could break. Consider a small React ErrorBoundary around the preview mount to isolate failures."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only)", "frontend": "100%"},
+  "test_credentials": "None required",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All web-dev course flows (switcher, live Hiccup render, reactive state counter, forms, todo capstone, exercises) work end-to-end with no console errors. React 17 UMD + scittle.reagent.js load reliably from CDN within ~3-6s after switching to the web course. The reagent snippets auto-render on mount without requiring a manual Run click. Regression: original Clojure course still runs snippets correctly (=> 42). No further action needed unless UI content changes.",
+  "rca of the issue": "No issues to RCA."
+}

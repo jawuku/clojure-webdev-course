@@ -1,0 +1,49 @@
+{
+  "summary": "Tested TWO newly-added features on the multi-course ClojureScript learning app. FEATURE B (course-complete celebration overlay) works end-to-end at 100%. FEATURE A (in-lesson 'Continue to next course' CTA button on the final Clojure lesson) is BROKEN: the 'cta' block type is not handled in src/components/LessonView.jsx and no button with data-testid='lesson-cta-btn' is rendered — its text falls through to the default <p> renderer. Regression on the web-dev course still passes (reagent live preview renders 'Hello, Hiccup!' with 0 errors, course switch persists, doc title updates). Zero browser console errors/warnings during the entire run.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {
+        "component": "LessonView.jsx (Block switch)",
+        "issue": "The 'cta' block type used in src/data/lessonsPart5.js (final lesson 'whats-next') has NO matching case in the Block() switch statement. It falls through to the default branch which renders block.text as a <p>. Result: no button, no data-testid='lesson-cta-btn', no onSwitchCourse wiring. Additionally, the Block() component signature does not destructure onSwitchCourse — LessonView passes it via <Block onSwitchCourse={onSwitchCourse} /> but Block only accepts { block }.",
+        "selector": "[data-testid='lesson-cta-btn']",
+        "priority": "HIGH"
+      }
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "detailed_results": {
+    "feature_a_cta_button": "FAIL — On the last Clojure lesson (index 35, id 'whats-next', title \"What's Next: Web Development with ClojureScript\"), [data-testid='lesson-cta-btn'] count = 0. The CTA text ('Ready to build real, interactive websites...') is visible only as a paragraph, no clickable button, so the promised one-click switch to Web Dev course is absent from this path.",
+    "feature_b_course_complete": "PASS — After seeding parens_clojure_v1 progress with all 36 lesson ids marked done (welcome, values, prefix, def, defn, ... , files, project, whats-next) and reloading, the sidebar progress card reads '100%' / '36 of 36 lessons complete'. Overlay [data-testid='course-complete'] appears with title 'Course complete!'. [data-testid='course-complete-next'] label reads: 'Continue to \u201cHiccup \u2014 Web Dev with ClojureScript\u201d'. [data-testid='course-complete-close'] exists and dismisses the overlay.",
+    "celebration_persistence": "PASS — After showing once and closing, reloading the page does NOT re-open the overlay (localStorage key 'parens_clojure_v1__celebrated' = '1'). Clearing that flag and reloading re-shows the overlay as expected.",
+    "next_course_switch_from_overlay": "PASS — Clicking [data-testid='course-complete-next'] switches active course: document.title becomes 'Hiccup \u2014 Web Dev with ClojureScript', sidebar brand shows '</> Hiccup / Web Dev with ClojureScript', 19 web-dev sidebar lessons rendered, URL deep-link cleared.",
+    "regression_snippet_run": "PASS — On a web-dev lesson containing a runnable snippet, [data-testid='snippet-run'] executes to a [data-testid='snippet-result'] with 0 [data-testid='snippet-error']. (Web-dev lesson index 0 has no runnable snippet, which is expected content, not a bug.)",
+    "regression_reagent_live": "PASS — 'Hiccup: HTML as Data' lesson: [data-testid='reagent-preview'] renders 'Hello, Hiccup!\\n\\nThis is real HTML, described as a Clojure vector.\\n\\nEverything you know about vectors applies here.' with 0 [data-testid='reagent-error'].",
+    "console_errors": "0 errors, 0 warnings, 0 pageerror events. Only info-level noise: 'Download the React DevTools for a better development experience.'"
+  },
+  "root_cause_of_feature_a": {
+    "file": "/app/frontend/src/components/LessonView.jsx",
+    "problem": "Block() switch has no 'case \"cta\"' branch. The lesson data in /app/frontend/src/data/lessonsPart5.js (line 225) already emits { t: 'cta', text, label, courseId: 'webdev' } but LessonView never renders a button for it. Additionally, LessonView renders <Block ... onSwitchCourse={onSwitchCourse} /> but Block only destructures { block }, so even if a case were added, the switch handler must be given access to onSwitchCourse.",
+    "suggested_fix": "1) In Block() destructure { block, onSwitchCourse }. 2) Add a case in the switch:\n   case 'cta': return (\n     <div className=\"lesson-cta\">\n       {block.text && <p className=\"lesson-p\">{block.text}</p>}\n       <button className=\"lesson-cta-btn\" data-testid=\"lesson-cta-btn\" onClick={() => onSwitchCourse && onSwitchCourse(block.courseId)}>\n         {block.label || 'Continue'}\n       </button>\n     </div>\n   );\n3) The .lesson-cta-btn CSS already exists in App.css (lines 1485+), confirming the intent — only the JSX handler is missing."
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Fix LessonView.jsx Block() to handle block.t === 'cta' and render a <button data-testid='lesson-cta-btn'> that invokes onSwitchCourse(block.courseId). Also thread onSwitchCourse into the Block component signature."
+  ],
+  "critical_code_review_comments": [
+    "src/components/LessonView.jsx: <Block onSwitchCourse=... /> is passed but Block only accepts { block }. The prop is silently dropped. This is a real bug (Feature A) and also a code-quality smell — React won't warn for extra props. Add a PropTypes / TypeScript signature or at least an eslint rule to catch this class of drop-through.",
+    "CourseComplete.jsx: The effect that sets 'celebrated' runs the moment allDone flips true; however if a learner rapidly toggles the mark-complete button (done -> undone), the celebrated flag is removed and would fire again next time. That is intentional per the code comment, but consider debouncing or requiring an explicit dismissal for higher-quality UX.",
+    "CourseComplete overlay is inside <AppProvider storageKey=...>, and uses `${storageKey}__celebrated` — correct per-course scoping. Good.",
+    "App.js Shell recomputes readInitialState(course, lastLocation) on every render; only used once for initial state. Fine, but call out that useMemo would be cleaner.",
+    "No global ErrorBoundary around <LessonView />; a bad block type (like the current 'cta' which silently renders a <p>) is a fail-quiet issue that ErrorBoundaries won't catch, but a whitelist assertion in Block() (e.g. dev-only console.warn for unknown t) would surface such regressions instantly."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only)", "frontend": "80% (4/5 feature checks pass; 1 critical fail: CTA button missing)"},
+  "test_credentials": "None required",
+  "seed_data_creation": "During test-only: wrote localStorage 'parens_clojure_v1' = { progress: { <all 36 lesson ids>: { done:true, exercises:{} } }, lastLocation: null } to trigger the celebration without clicking 36 times. Cleared at the end via reset flow. No persistent seed created.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Feature B (course-complete overlay) verified fully working: overlay appears at 100% progress, has next button switching to webdev, has close button, persists via 'parens_clojure_v1__celebrated' flag so it does NOT re-appear on reload. Feature A (in-lesson CTA button on last Clojure lesson 'whats-next') is broken — the 'cta' block case is missing in LessonView.jsx Block switch, and Block doesn't accept onSwitchCourse. After main agent fixes Block(): (1) navigate to nav-lesson-35 and confirm [data-testid='lesson-cta-btn'] exists with label mentioning 'Web Dev with ClojureScript', (2) click it and confirm doc title becomes 'Hiccup — Web Dev with ClojureScript'. Regression paths (course switch, reagent live render, snippet-run) all continue to pass; no need to re-test those unless LessonView is heavily refactored.",
+  "rca of the issue": "Feature A CTA button not rendering — RCA: /app/frontend/src/components/LessonView.jsx Block() switch statement handles 'h','note','code','read','reagent','list','p' but has no branch for 't: cta'. Data at /app/frontend/src/data/lessonsPart5.js:225 uses { t:'cta', text, label, courseId:'webdev' } so it falls through to default which renders <p>{block.text}</p>. Additionally, Block() does not destructure onSwitchCourse from its props even though LessonView.jsx line 65 passes it. Reproduction: open the app, navigate to nav-lesson-35 ('What's Next: Web Development with ClojureScript'), look for [data-testid='lesson-cta-btn'] — count is 0. Mitigation: add a 'cta' case that renders a button with data-testid='lesson-cta-btn' calling onSwitchCourse(block.courseId), and update Block() signature to accept onSwitchCourse."
+}

@@ -1,0 +1,37 @@
+{
+  "summary": "Regression check after low-risk refactor (useMemo on AppContext provider value; empty catch blocks replaced with console.debug in AppContext.jsx, App.js, CourseComplete.jsx, lib/sci.js). ALL previously-working behavior confirmed unchanged. Zero console errors/warnings/pageerrors across the entire run.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "detailed_results": {
+    "app_load_clojure": "PASS — document.title = 'Parens — Learn Clojure'; sidebar brand '( ) Parens / Learn Clojure'; 36 lessons listed; 'Your progress 0% / 0 of 36' after localStorage.clear() + reload.",
+    "theme_toggle": "PASS — [data-testid='theme-toggle'] flips documentElement[data-theme] kanagawa -> gruvbox and back.",
+    "font_size_buttons": "PASS — [data-testid='font-increase'] two clicks: 16 -> 18; [data-testid='font-decrease'] one click: 18 -> 17. Persisted in localStorage 'parens_clojure_v1'.fontSize.",
+    "progress_persistence": "PASS — Clicked [data-testid='mark-complete'] on lesson 0 ('welcome'); after full page reload, localStorage 'parens_clojure_v1'.progress = {welcome:{done:true,exercises:{}}} and sidebar shows the lesson as completed. useMemo did not break state persistence.",
+    "course_switcher": "PASS — [data-testid='course-switcher-btn'] opens menu; [data-testid='course-option-webdev'] switches to Web Dev; document.title -> 'Hiccup — Web Dev with ClojureScript'; sidebar brand innerText contains '</> Hiccup / Web Dev with ClojureScript'; localStorage 'parens_active_course_v1' = 'webdev'.",
+    "live_snippet_run": "PASS — On a Web Dev lesson with a runnable snippet (lesson index 6, 'Building Lists — map, filter, reduce'), clicking [data-testid='snippet-run'] produced [data-testid='snippet-result'] = '=> (\"APPLE\" \"PEAR\" \"PLUM\")' with 0 [data-testid='snippet-error'].",
+    "live_reagent_hiccup": "PASS — Lesson index 9 'Hiccup: HTML as Data': [data-testid='reagent-preview'] rendered 'Hello, Hiccup! This is real HTML, described as a Clojure vector. Everything you know about vectors applies here.' with 0 [data-testid='reagent-error'].",
+    "live_reagent_atom_counter": "PASS — 'State with Reactive Atoms' lesson: [data-testid='reagent-preview'] showed 'Count: 0 + - reset'; clicking '+' updated to 'Count: 1 + - reset'. No reagent-error. Confirms atom reactivity through SCI + Reagent + memoized context still works.",
+    "end_of_clojure_cta": "PASS — Switched back to Clojure, opened [data-testid='nav-lesson-35'] ('whats-next'). [data-testid='lesson-cta-btn'] exists with text 'Start: Web Dev with ClojureScript'. Click switched courses: title -> 'Hiccup — Web Dev with ClojureScript'; localStorage 'parens_active_course_v1' = 'webdev'.",
+    "course_complete_overlay": "PASS — Seeded localStorage 'parens_clojure_v1'.progress with done:true for all 36 lesson ids (welcome … whats-next); removed 'parens_clojure_v1__celebrated'; reloaded. [data-testid='course-complete'] overlay appeared with both [data-testid='course-complete-next'] and [data-testid='course-complete-close']. Sidebar reads '100% / 36 of 36 lessons complete'. Screenshot verified.",
+    "console_diagnostics": "0 errors, 0 warnings, 0 pageerror events, 0 console.debug lines during the full flow (none of the refactored catch blocks were hit because localStorage was healthy — expected). All original functionality intact."
+  },
+  "test_report_links": ["/app/test_reports/regression_end.png"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "AppContext.jsx useMemo dependency list correctly includes theme (derived from themeKey) and all callbacks (which are stable via useCallback). Note that including both themeKey and theme is slightly redundant since theme = THEMES[themeKey] is a pure derivation, but harmless.",
+    "CourseComplete.jsx: the 'else' branch (allDone === false) unconditionally calls localStorage.removeItem(celebratedKey) on every render, which is a minor write. Consider guarding on a state ref so the write only fires when transitioning from allDone->!allDone. Not a bug, just noise.",
+    "sci.js bootstrap(): catch now console.debug — good. Consider also gating bootstrap() on reagentReady()/sciReady() being fully initialised to avoid the first-call swallow scenario (still fine because bootstrapped stays false and it will retry)."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (frontend-only)", "frontend": "100% (10/10 regression checks pass)"},
+  "test_credentials": "None required",
+  "seed_data_creation": "Test-only, cleared at start of each scenario: localStorage.clear() at run start; later seeded 'parens_clojure_v1'.progress = {<all 36 lesson ids>:{done:true,exercises:{}}} and removed 'parens_clojure_v1__celebrated' to verify course-complete overlay. No persistent seed retained beyond the test.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Refactor iteration verified clean. Provider value memoization (useMemo) and console.debug catches introduced no behavioral change. All prior features (two-course switcher, live SCI eval, live Reagent hiccup + atom counter, end-of-Clojure CTA, course-complete celebration + persistence) remain at 100%. Reagent counter increment on 'State with Reactive Atoms' confirms context updates still propagate correctly (memoized value updates on progress/theme/font changes as expected).",
+  "rca of the issue": "N/A — no regressions found."
+}

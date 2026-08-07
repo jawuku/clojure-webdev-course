@@ -1,0 +1,45 @@
+{
+  "summary": "Frontend-only verification of two NEW additions: Global-Flag deep-dive lesson (index 12) and Golf Leaderboard capstone (index 16). All tests pass. App loads showing Regex course with 18 lessons and no console errors. Global-flag lesson runs all 5 demo snippets successfully with the exact expected outputs. Both global-flag exercises pass with the required solutions. Golf leaderboard renders with 4 rows (double/novowel/hashtag/three), initial state shows '—' for all bests and '0/4 holes solved'. Solving Regex Golf HOLE 1 with #\"(.)\\1\" (5 chars) records best=5 in localStorage under key regex_golf_scores_v1 and the leaderboard updates to show best-double=5 and solved=1/4. Reset button clears both localStorage and the leaderboard cells back to '—' and 0/4. Regression: Lesson 1 re-seq digits snippet still returns (\"66\" \"99\"). No console errors or page errors observed.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Capstone: Golf Leaderboard", "issues": ["Preview build styling is intentionally minimal (per request note) — table renders as unstyled inline text ('Golf Leaderboard0/4 holes solved', 'HoleParYour bestMedal', 'Doubled character5——'). Behavior verified via data-testids as instructed."]}
+    ]
+  },
+  "test_evidence": {
+    "lesson_count": "18 lessons visible in sidebar",
+    "L12_snippets": {
+      "(str/replace \"Banana\" #\"a\" \"o\")": "=> \"Bonono\"",
+      "(str/replace-first \"Banana\" #\"a\" \"o\")": "=> \"Bonana\"",
+      "(re-seq #\"\\d+\" \"1 22 333\")": "=> (\"1\" \"22\" \"333\")",
+      "(.replace \"Cat cat CAT\" (js/RegExp. \"cat\" \"gi\") \"dog\")": "=> \"dog dog dog\"",
+      "stateful g-flag test": "=> [true false]"
+    },
+    "L12_exercises": {
+      "ex0": "Nice! All checks passed. (= answer \"f00 b00 z00\")",
+      "ex1": "Nice! All checks passed. (= answer \"f0o boo zoo\")"
+    },
+    "L16_initial": {"best-*": "—", "solved": "0/4 holes solved", "leaderboard exists": true},
+    "L15_hole1_solve": "Nice! All checks passed.",
+    "localStorage_after_solve": "{\"double\":5}",
+    "L16_after_solve": {"best-double": "5", "solved": "1/4 holes solved"},
+    "L16_after_reset": {"best-double": "—", "solved": "0/4 holes solved", "localStorage": null},
+    "regression_lesson1": "re-seq digits => (\"66\" \"99\")",
+    "console_errors": "None"
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Golf leaderboard styling missing in preview build (acknowledged as intentional per problem statement — CSS lives in standalone project). If production build should include styling, ensure CSS is copied over.",
+    "Exercise.jsx: recordGolfScore is guarded by res.passed and exercise.golf presence — correct and clean.",
+    "golf.js localStorage key 'regex_golf_scores_v1' is versioned — good practice for future schema changes."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100%"},
+  "seed_data_creation": "None. localStorage cleared before each test run for clean baseline.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Both new features (global-flag lesson index 12 and golf-leaderboard capstone index 16) work correctly. When testing CodeMirror-based Exercise inputs, prefer clicking data-testid='exercise-solution-{idx}' (which invokes showSolution to fill the correct answer into React state) rather than trying to type into .cm-content — direct keyboard typing via Ctrl+A + type is unreliable against CodeMirror 6 in this app and produced empty/appended input on first attempt. patternSourceLength counts chars inside #\"...\" so #\"(.)\\1\" (chars: (,.,),\\,1) = length 5 = par for HOLE 1."
+}

@@ -1,0 +1,60 @@
+{
+  "summary": "Verified the 4 NEW advanced regex lessons live at the preview URL. All expected snippet outputs match. Regex Golf exercises all 4 holes pass with their built-in Solution. Regression sanity (lesson 'find, seq & matches') still works. No console errors/warnings observed (only React DevTools info message).",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_results": {
+    "sidebar_lesson_count": "16 (LESSON N OF 16 shown). Sections 'Advanced Patterns' and 'Challenge' both present.",
+    "regression_lesson_1_find_seq_matches": "PASS — re-seq digits produced (\"66\" \"99\") as expected.",
+    "flags_lesson": {
+      "nav_testid_actually_used": "nav-lesson-11 (spec said nav-lesson-12 — see note)",
+      "title": "Flags: Changing the Rules",
+      "snippet_1_case_insensitive_re_find": "\"CAT\" — PASS",
+      "snippet_2_case_insensitive_re_seq_vowels": "(\"A\" \"E\" \"I\" \"o\" \"u\") — PASS",
+      "snippet_3_extra_digits": "(\"12\" \"34\" \"5\") — PASS",
+      "errors": "none"
+    },
+    "lookarounds_lesson": {
+      "nav_testid_actually_used": "nav-lesson-12 (spec said nav-lesson-13)",
+      "title": "Lookahead & Lookbehind",
+      "lookahead_kg": "\"100\" — PASS",
+      "lookbehind_dollar": "\"42\" — PASS",
+      "other_snippets": "all executed without error (results: (\"3\" \"5\"), \"cat\", (\"7\" \"12\"))",
+      "errors": "none — confirms V8 lookbehind support in SCI runtime"
+    },
+    "named_groups_lesson": {
+      "nav_testid_actually_used": "nav-lesson-13 (spec said nav-lesson-14)",
+      "title": "Named Groups",
+      "str_replace_named_backrefs": "\"15/06/2026\" — PASS",
+      "js_interop_groups_year": "\"2026\" — PASS",
+      "extra_snippets": "[\"2026-06-15\" \"2026\" \"06\" \"15\"], {:year \"2026\", :month \"06\", :day \"15\"} — PASS",
+      "errors": "none"
+    },
+    "regex_golf_lesson": {
+      "nav_testid_actually_used": "nav-lesson-14 (spec said nav-lesson-15)",
+      "title": "Regex Golf",
+      "hole_1_doubled_char": "Solution #\"(.)\\1\" → 'Nice! All checks passed.' — PASS",
+      "hole_2_non_vowels": "Solution #\"[^aeiou]+\" → 'Nice! All checks passed.' — PASS",
+      "hole_3_hashtag": "Solution #\"#\\w+\" → 'Nice! All checks passed.' — PASS",
+      "hole_4_three_word_chars": "Solution #\"\\w{3}\" → 'Nice! All checks passed.' — PASS",
+      "practice_counter": "4/4 solved",
+      "typing_note": "When manually typing #\"(.)\\1\" via keyboard, CodeMirror auto-closes the trailing quote yielding #\"(.)\\1\\\"\" which fails the check. Using the built-in Solution button (or Reset then careful typing) produces the exact expected pattern and passes. This is a CodeMirror auto-close-quote UX quirk, not a runtime bug."
+    },
+    "console_errors_warnings": "None. Only benign 'Download React DevTools' info log."
+  },
+  "test_report_links": [],
+  "action_items": [
+    "MINOR (spec-only): The review_request states nav-lesson-12..15 for Flags/Lookarounds/Named-Groups/Regex-Golf, but the data-testids in the live app are actually nav-lesson-11..14 (0-based index into LESSONS array; the sidebar labels 12..15 are 1-based). All four lessons themselves work correctly — this is only a documentation mismatch to note.",
+    "OPTIONAL UX: CodeMirror auto-close-quote inside golf-hole editors can trip up learners who type the solution literally (typing #\"...\" gets an extra trailing \"). Consider disabling autoClose brackets for the string quote in the exercise editor, or trimming trailing quotes on evaluation."
+  ],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "n/a (skipped per request)", "frontend": "100% for new lessons (all snippets + all 4 golf holes pass)"},
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Preview URL will be reverted after this test per note. Frontend testids for lessons are 0-based (nav-lesson-0..15) while sidebar labels are 1-based (1..16). SCI runtime supports lookahead, lookbehind, named groups, backreferences, and flags via js/RegExp. Golf hole editor has auto-close quotes — use exercise-solution-N button to load solutions programmatically."
+}

@@ -1,0 +1,20 @@
+{
+  "summary": "Regex course frontend live-execution smoke test passed end-to-end. Sidebar shows brand 'Regex / Master Regular Expressions' with 12 lessons across 6 sections. All required snippets executed correctly via SCI: (re-seq #\"\\d+\" \"order 66 shipped 99 items\") => (\"66\" \"99\"); (re-matches #\"\\d+\" \"12345\") => \"12345\"; (re-matches #\"\\d+\" \"12a45\") => nil; (str/replace \"2026-06-15\" #\"(\\d{4})-(\\d{2})-(\\d{2})\" \"$3/$2/$1\") => \"15/06/2026\". Exercise 1 (re-seq on \"a12b345c\") on lesson 1 solved: 'Nice! All checks passed.' and Run showed => (\"12\" \"345\"). Cheat Sheet loaded (data-testid open-cheatsheet -> cheatsheet-page) with 24 runnable examples (data-testid cheat-run/cheat-result); first example evaluated to => \"12\" without error. No console errors or warnings observed during the flow.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Cheat Sheet uses distinct data-testids (cheat-run/cheat-result/cheat-item) rather than snippet-run/snippet-result used in lessons. Not a bug, but note for future test scripts."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped as requested)", "frontend": "100%"},
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Regex course engine is fully functional. Lesson testids: nav-lesson-0..11 (12 lessons). Snippet testids in lessons: snippet-run/snippet-result/snippet-error. Exercise testids: exercise-{i}, exercise-check-{i}, exercise-run-{i}, exercise-hint-{i}, exercise-solution-{i}. Cheat sheet testids: open-cheatsheet, cheatsheet-page, cheat-item, cheat-run, cheat-result. Typing into CodeMirror via page.keyboard.type triggers auto-close for quotes/parens which corrupts input; prefer clicking the Solution testid or dispatching CodeMirror transactions."
+}
