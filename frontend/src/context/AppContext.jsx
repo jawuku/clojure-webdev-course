@@ -56,12 +56,35 @@ function load(key) {
   }
 }
 
+// Resolve the OS light/dark preference (guarded for non-browser environments).
+function systemPrefersDark() {
+  return (
+    typeof window !== "undefined" &&
+    !!window.matchMedia &&
+    window.matchMedia("(prefers-color-scheme: dark)").matches
+  );
+}
+
 export function AppProvider({ children, storageKey = DEFAULT_STORAGE_KEY }) {
   const initial = load(storageKey);
-  const [themeKey, setThemeKey] = useState(initial.themeKey || "kanagawa");
+  // themeKey is the *pinned* user choice, or null to follow the OS theme.
+  const [themeKey, setThemeKey] = useState(initial.themeKey ?? null);
+  const [systemDark, setSystemDark] = useState(systemPrefersDark);
   const [fontSize, setFontSize] = useState(initial.fontSize || 16);
   const [progress, setProgress] = useState(initial.progress || {}); // { lessonId: { done, exercises: {idx:true} } }
   const [lastLocation, setLastLocation] = useState(initial.lastLocation || null); // { view, lessonId }
+
+  // Live-follow OS light/dark changes (e.g. macOS auto-switching at sunset)
+  // until the learner pins a theme explicitly.
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = (e) => setSystemDark(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  // The theme actually in effect: pinned choice if any, else the OS preference.
+  const effectiveThemeKey = themeKey ?? (systemDark ? "kanagawa" : "gruvbox");
 
   useEffect(() => {
     localStorage.setItem(
@@ -71,15 +94,19 @@ export function AppProvider({ children, storageKey = DEFAULT_STORAGE_KEY }) {
   }, [storageKey, themeKey, fontSize, progress, lastLocation]);
 
   useEffect(() => {
-    const theme = THEMES[themeKey];
+    const theme = THEMES[effectiveThemeKey];
     document.documentElement.classList.toggle("dark", theme.dark);
-    document.documentElement.setAttribute("data-theme", themeKey);
-  }, [themeKey]);
+    document.documentElement.setAttribute("data-theme", effectiveThemeKey);
+  }, [effectiveThemeKey]);
 
-  const toggleTheme = useCallback(
-    () => setThemeKey((k) => (k === "kanagawa" ? "gruvbox" : "kanagawa")),
-    []
-  );
+  // Toggle flips the *effective* theme and pins it, so the choice persists and
+  // the app stops following OS changes until the learner picks "system" again.
+  const toggleTheme = useCallback(() => {
+    setThemeKey((k) => {
+      const current = k ?? (systemDark ? "kanagawa" : "gruvbox");
+      return current === "kanagawa" ? "gruvbox" : "kanagawa";
+    });
+  }, [systemDark]);
 
   const changeFont = useCallback((delta) => {
     setFontSize((s) => Math.min(24, Math.max(13, s + delta)));
@@ -104,13 +131,14 @@ export function AppProvider({ children, storageKey = DEFAULT_STORAGE_KEY }) {
 
   const resetProgress = useCallback(() => setProgress({}), []);
 
-  const theme = THEMES[themeKey];
+  const theme = THEMES[effectiveThemeKey];
 
   // Memoize the context value so consumers don't re-render on every provider
   // render (all callbacks below are already stable via useCallback).
   const value = useMemo(
     () => ({
       themeKey,
+      effectiveThemeKey,
       theme,
       themeVars: theme.editor,
       dark: theme.dark,
@@ -127,6 +155,7 @@ export function AppProvider({ children, storageKey = DEFAULT_STORAGE_KEY }) {
     }),
     [
       themeKey,
+      effectiveThemeKey,
       theme,
       fontSize,
       progress,

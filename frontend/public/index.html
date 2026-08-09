@@ -23,6 +23,34 @@
         Learn how to configure a non-root public URL by running `npm run build`.
         -->
         <title>Parens — Learn Clojure in your browser</title>
+        <!-- Apply the saved (or OS-preferred) theme before first paint so the
+             page never flashes the wrong theme while React boots. Mirrors the
+             effectiveThemeKey logic in src/context/AppContext.jsx. -->
+        <script>
+            (function () {
+                try {
+                    var themeKey = null;
+                    // Any course storage key may hold a pinned themeKey.
+                    for (var i = 0; i < localStorage.length; i++) {
+                        var k = localStorage.key(i);
+                        try {
+                            var v = JSON.parse(localStorage.getItem(k));
+                            if (v && typeof v.themeKey === "string") {
+                                themeKey = v.themeKey;
+                                break;
+                            }
+                        } catch (e) { /* ignore unparseable entries */ }
+                    }
+                    var dark = themeKey
+                        ? themeKey === "kanagawa"
+                        : window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+                    var eff = themeKey || (dark ? "kanagawa" : "gruvbox");
+                    var el = document.documentElement;
+                    el.setAttribute("data-theme", eff);
+                    el.classList.toggle("dark", dark);
+                } catch (e) { /* never break first paint */ }
+            })();
+        </script>
         <script>window.addEventListener("error",function(e){if(e.error instanceof DOMException&&e.error.name==="DataCloneError"&&e.message&&e.message.includes("PerformanceServerTiming")){e.stopImmediatePropagation();e.preventDefault()}},true);</script>
         <script src="https://assets.emergent.sh/scripts/emergent-main.js"></script>
     </head>

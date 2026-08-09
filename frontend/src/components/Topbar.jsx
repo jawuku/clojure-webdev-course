@@ -4,8 +4,11 @@ import { Sun, Moon, Type, Minus, Plus, Share2, Check } from "lucide-react";
 
 export function Topbar({ title, getShareUrl }) {
   const { theme, toggleTheme, fontSize, changeFont } = useApp();
-  const isDark = theme.dark;
   const [copied, setCopied] = useState(false);
+
+  // The toggle flips to (and pins) the *other* theme, so label it with the
+  // target theme — the effective one is already visible in the UI.
+  const target = theme.dark ? "Gruvbox" : "Kanagawa";
 
   const share = async () => {
     const url = getShareUrl ? getShareUrl() : window.location.href;
@@ -51,9 +54,9 @@ export function Topbar({ title, getShareUrl }) {
           </button>
         </div>
 
-        <button className="theme-toggle" onClick={toggleTheme} data-testid="theme-toggle">
-          {isDark ? <Moon size={15} /> : <Sun size={15} />}
-          <span>{theme.name}</span>
+        <button className="theme-toggle" onClick={toggleTheme} data-testid="theme-toggle" title={`Switch to ${target} theme`}>
+          {theme.dark ? <Sun size={15} /> : <Moon size={15} />}
+          <span>{target}</span>
         </button>
       </div>
     </header>
