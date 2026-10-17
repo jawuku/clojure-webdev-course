@@ -7,11 +7,12 @@ import { WEB_CHEATSHEET } from "../data/webCheatsheet";
 
 // "Web Development with ClojureScript" — the follow-on course. It reuses the
 // exact same UI, themes, REPL, search and cheat sheet as the Clojure course.
-// The only extra ingredient is a live Reagent runtime, loaded via runtimeScripts.
+// ClojureScript/Reagent-specific snippets are being ported to the JVM UI
+// runtime; until then their live previews render as read-only examples.
 const LESSONS = [...webPart1, ...webPart2, ...webPart3, ...webPart4];
 
 const REPL_WELCOME =
-  ';; ClojureScript REPL — same language, running as JavaScript in your browser.\n;; Try some interop:\n(js/Math.max 3 9 2)\n(.toUpperCase "clojurescript")';
+  ';; Clojure REPL — running on the local JVM.\n;; Try a few expressions:\n(map inc [1 2 3])\n(->> (range 10) (filter even?) (reduce +))\n(clojure.string/upper-case "clojure")';
 
 export const webCourse = buildCourse({
   id: "webdev",
@@ -23,14 +24,6 @@ export const webCourse = buildCourse({
   lessons: LESSONS,
   cheatsheet: WEB_CHEATSHEET,
   replWelcome: REPL_WELCOME,
-  // Reagent needs React + ReactDOM, then the Scittle reagent plugin (loaded in
-  // order, after the Scittle core that public/index.html already provides).
-  // React 18 gives us the modern createRoot API used by renderReagent().
-  runtimeScripts: [
-    "https://unpkg.com/react@18/umd/react.production.min.js",
-    "https://unpkg.com/react-dom@18/umd/react-dom.production.min.js",
-    "https://cdn.jsdelivr.net/npm/scittle@0.7.27/dist/scittle.reagent.js",
-  ],
 });
 
 export default webCourse;

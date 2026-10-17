@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Play, RotateCcw } from "lucide-react";
 import { CodeEditor } from "./CodeEditor";
-import { evalClojure } from "../lib/sci";
+import { evalClojure } from "../lib/runtime";
 import { useApp } from "../context/AppContext";
 
 export function RunnableSnippet({ code }) {
@@ -10,11 +10,14 @@ export function RunnableSnippet({ code }) {
   const [result, setResult] = useState(null);
   const [running, setRunning] = useState(false);
 
-  const run = () => {
+  const run = async () => {
+    if (running) return;
     setRunning(true);
-    const r = evalClojure(source);
-    setResult(r);
-    setRunning(false);
+    try {
+      setResult(await evalClojure(source));
+    } finally {
+      setRunning(false);
+    }
   };
 
   const reset = () => {
@@ -31,7 +34,7 @@ export function RunnableSnippet({ code }) {
             <RotateCcw size={14} />
           </button>
           <button className="run-btn" onClick={run} disabled={running} data-testid="snippet-run">
-            <Play size={13} /> Run
+            <Play size={13} /> {running ? "Running…" : "Run"}
           </button>
         </div>
       </div>

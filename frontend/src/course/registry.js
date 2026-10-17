@@ -8,9 +8,9 @@ export function buildCourse({
   tagline,
   brandMark = "( )",
   storageKey,
-  // SCI evaluation namespace for this course. Every course must have its own
+  // Evaluation namespace for this course. Every course must have its own
   // namespace so lesson snippets / the REPL / the cheat sheet never leak vars
-  // between courses (see setCourseNs in lib/sci.js). Current mapping:
+  // between courses (see setCourseNs in lib/runtime.js). Current mapping:
   //   clojure -> "user"   webdev -> "web"   regex -> "regex"
   // Use a short, valid Clojure symbol. If omitted, a safe per-course
   // namespace is derived from the id ("course-<id>") — isolated, but the
@@ -18,12 +18,6 @@ export function buildCourse({
   ns,
   lessons,
   cheatsheet = [],
-  // Optional extra <script> URLs to load into the SCI runtime (e.g. Scittle
-  // plugins like reagent / re-frame for the web-dev course).
-  runtimeScripts = [],
-  // Optional Clojure code evaluated once when the runtime is ready
-  // (e.g. requiring commonly-used namespaces).
-  bootstrapCode = "(require '[clojure.string :as str]) (require '[clojure.set :as set])",
   // Default REPL playground contents.
   replWelcome,
 }) {
@@ -46,14 +40,12 @@ export function buildCourse({
     tagline,
     brandMark,
     storageKey: storageKey || `parens_course_${id}`,
-    // Every course gets its own SCI namespace (see the `ns` field above).
+    // Every course gets its own evaluation namespace (see the `ns` field above).
     ns: ns || `course-${id}`,
     LESSONS: lessons,
     GROUPS,
     indexOfLessonId,
     cheatsheet,
-    runtimeScripts,
-    bootstrapCode,
     replWelcome,
   };
 }

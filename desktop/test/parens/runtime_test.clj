@@ -31,6 +31,34 @@
         (is (= "3" (:value response)))
         (is (number? (:ms response)))))))
 
+(deftest multi-form-code-sees-earlier-definitions
+  (with-worker
+    (fn []
+      (let [response (evaluate
+                      (str "(defprotocol Shape (area [s]))\n"
+                           "(defrecord Square [side] Shape (area [s] (* side side)))\n"
+                           "(area (->Square 3))"))]
+        (is (true? (:ok response)) (:error response))
+        (is (= "9" (:value response)))))))
+
+(deftest exercise-answers-can-use-protocols
+  (with-worker
+    (fn []
+      (let [result (runtime/run-exercise
+                    "exercise"
+                    (str "(defprotocol Named (label [x]))\n"
+                         "(defn make-label [text] (reify Named (label [x] text)))")
+                    ["(= (label (make-label \"hi\")) \"hi\")"])]
+        (is (true? (:passed result)) (pr-str (:runError result)))))))
+
+(deftest compiler-errors-include-the-cause
+  (with-worker
+    (fn []
+      (let [response (evaluate "(js/Math.max 1 2)")]
+        (is (false? (:ok response)))
+        (is (re-find #"caused by" (:error response)))
+        (is (re-find #"No such namespace: js" (:error response)))))))
+
 (deftest exercises-run-in-fresh-namespaces
   (with-worker
     (fn []

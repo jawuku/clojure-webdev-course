@@ -2,10 +2,10 @@ import { useEffect, useRef } from "react";
 import { EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers, highlightActiveLine } from "@codemirror/view";
 import { history, historyKeymap, defaultKeymap } from "@codemirror/commands";
-import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { bracketMatching, HighlightStyle, indentOnInput, syntaxHighlighting } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
 import { autocompletion, completeFromList, closeBrackets } from "@codemirror/autocomplete";
-import { default_extensions, complete_keymap } from "@nextjournal/clojure-mode";
+import { complete_keymap, syntax as clojureSyntax } from "@nextjournal/clojure-mode";
 
 const CLOJURE_CORE = [
   "def", "defn", "defn-", "defmacro", "fn", "let", "letfn", "if", "if-not", "when",
@@ -35,6 +35,10 @@ function clojureCompletions(context) {
   if (!word || (word.from === word.to && !context.explicit)) return null;
   return completeFromList(CLOJURE_CORE)(context);
 }
+
+// One language object shared by every editor: defining it per keystroke-host
+// would duplicate the parser configuration for every snippet on a lesson.
+const CLOJURE_LANGUAGE = clojureSyntax();
 
 function highlightStyleFor(vars) {
   return HighlightStyle.define([
@@ -130,12 +134,20 @@ export function CodeEditor({ value, onChange, onRun, themeVars, dark, fontSize =
       },
     ]);
 
+    // Build the language extensions by hand instead of spreading
+    // @nextjournal/clojure-mode's default_extensions. Its bundled close-bracket
+    // handler throws `TypeError: from_to is not a function` when an opening
+    // bracket is typed over a non-empty selection (a squint-compiled vector is
+    // called as a function). CodeMirror's closeBrackets covers the same case
+    // correctly, and the language itself still supplies syntax and indentation.
     const extensions = [
       runKeymap,
-      ...default_extensions,
+      CLOJURE_LANGUAGE,
       keymap.of(complete_keymap),
       history(),
       closeBrackets(),
+      bracketMatching(),
+      indentOnInput(),
       keymap.of([...defaultKeymap, ...historyKeymap]),
       autocompletion({ override: [clojureCompletions], activateOnTyping: true }),
       syntaxHighlighting(highlightStyleFor(themeVars)),

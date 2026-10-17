@@ -171,8 +171,9 @@ Prove the whole shape with the current build, before restructuring:
    down. Repeat on macOS/Windows in CI or a VM.
 6. Measure: cold start, warm eval p95 (target <150 ms), memory (two JVMs).
 
-Result: all six items completed on Linux. macOS and Windows app images now build and
-pass the checker in CI; native installers remain a Phase 6 task, not a Phase 0 blocker.
+Result: all six items completed on Linux. macOS and Windows app images, and the
+`.dmg`/`.msi`/`.exe` installers, now build and pass the checker in CI; release
+signing remains a Phase 6 task, not a Phase 0 blocker.
 
 **Gate:** if jpackage or the two-process model fails on a target OS, fix it here before any
 content work. This is now a low-risk spike, not a shell bake-off.
@@ -189,9 +190,17 @@ token/Host/Origin checks now run in CI as the security boundary (`desktop/test`,
 `.github/workflows/desktop-ci.yml`). The build is pinned to JDK 25 LTS. The same
 app-image build also passes 28/28 on Ubuntu 24.04 and 26.04 (the former with an
 installable `.deb`), Fedora 43 (with an installable `.rpm`), and on macOS (arm64) and
-Windows (x64) in CI. Those last two are app images, not `.dmg`/`.msi` installers.
+Windows (x64) in CI. macOS and Windows also build `.dmg`, `.msi`, and `.exe` installers,
+which CI installs and checks against the same suite. Signing and notarization are
+wired into `desktop-release.yml`; they need certificates and secret storage, which is
+a release cost.
 
-### Phase 1 — Vite migration (~4 days)
+### Phase 1 — Vite migration (~4 days) — **DONE**
+
+> Completed: Vite 7 is the UI build; no CDN/emergent/font requests remain; `runtime.js`
+> is wired to the Phase 0 HTTP API (set-ns/reset stay for Phase 2); Reagent blocks are
+> read-only placeholders. Verified by a 19-check Chromium smoke test over all 74 lessons
+> and the 28-check server suite — see `PHASE1_RESULTS.md`.
 
 - Keep the Maven-style layout but make Vite the UI build: `vite.config.js`
   (`@vitejs/plugin-react`, alias `@` → `/src`, `strictPort: true`, `outDir: "dist"`),
@@ -207,7 +216,13 @@ Windows (x64) in CI. Those last two are app images, not `.dmg`/`.msi` installers
 **Acceptance:** `vite build` + the JVM server renders all 74 lessons (runtime still stubbed
 where needed), themes/search/REPL shell work, zero console errors, zero external requests.
 
-### Phase 2 — Runtime API + content audit (~5 days)
+### Phase 2 — Runtime API + content audit (~5 days) — **DONE**
+
+> Completed: `/api/set-ns`, active namespace in runtime info, sequential top-level
+> evaluation (fixes defprotocol/defrecord/reify), cause-chain errors, and a JVM content
+> audit over 518 snippets/exercises/cheat-sheet examples with a shrinking baseline. The
+> audit found 44 known JavaScript-semantics failures for Phases 3–5; eval p95 is 16.5 ms.
+> See `PHASE2_RESULTS.md`.
 
 - Finish `parens.runtime` and `parens.api`: eval, exercise, set-ns, runtime-info,
   reset-runtime.
@@ -268,9 +283,11 @@ still measures the pattern source length.
   `.dmg`, Windows `.msi`/`.exe`); JDK 25 LTS (already pinned in Phase 0); app icon,
   version, license files. Ubuntu `.deb` and Fedora `.rpm` packaging paths already exist
   (`desktop/scripts/build_deb.sh`, `build_rpm.sh`); the `.deb`, `.rpm`, and app-image
-  jobs run in CI, including macOS and Windows app images. `.dmg`/`.msi`/`.exe`
-  installers, code signing, and macOS notarization remain — signing needs certificates,
-  so call it out as a release cost.
+  jobs run in CI, including macOS and Windows app images. `.dmg`, `.msi`, and `.exe`
+  installers are now built, installed, and checked in CI (`desktop/scripts/build_dmg.sh`,
+  `build_msi.sh`, `build_exe.sh`). Code signing (`sign_macos.sh`, `sign_windows.sh`) and
+  macOS notarization (`notarize_macos.sh`) run in `desktop-release.yml`; the
+  certificates/API keys and their secret storage remain a release cost.
 - Account for jpackage runtime quirks found in Phase 0: `--strip-native-commands` can
   leave no `bin/java` (the worker needs one; confirmed on Ubuntu 24.04 and Fedora 43
   with Temurin as well), and NixOS needs zlib bundled. Handle these per platform in the

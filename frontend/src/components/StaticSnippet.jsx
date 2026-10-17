@@ -3,7 +3,7 @@ import { useApp } from "../context/AppContext";
 import { Eye } from "lucide-react";
 
 // A non-runnable, syntax-highlighted code sample (for preview/reference code
-// that needs a real project build and can't run in the SCI sandbox).
+// that needs a real project build, or ClojureScript that has no JVM equivalent).
 export function StaticSnippet({ code }) {
   const { themeVars, dark, fontSize } = useApp();
   return (

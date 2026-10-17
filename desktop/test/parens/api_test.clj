@@ -6,7 +6,8 @@
   rules over a real loopback connection."
   (:require [cheshire.core :as json]
             [clojure.test :refer [deftest is testing]]
-            [parens.api :as api])
+            [parens.api :as api]
+            [parens.runtime :as runtime])
   (:import [java.io StringReader]))
 
 (def ^:private token "test-token-0123456789abcdef")
@@ -28,6 +29,10 @@
 (defn- body [response]
   (json/parse-string (:body response) true))
 
+(defn- body-text [response]
+  (let [raw (:body response)]
+    (if (string? raw) raw (String. ^bytes raw "UTF-8"))))
+
 (defn- handler [] (api/app token))
 
 ;; ---------------------------------------------------------------------------
@@ -40,14 +45,47 @@
     (is (pos? (:server-pid (body response))))))
 
 (deftest static-page-is-served-with-csp
-  (let [response ((handler) (request :get "/"))]
+  (let [response ((handler) (request :get "/"))
+        html (body-text response)]
     (is (= 200 (:status response)))
     (is (re-find #"text/html" (get-in response [:headers "content-type"])))
     (is (re-find #"default-src 'self'" (get-in response [:headers "content-security-policy"])))
-    (is (re-find #"Parens" (:body response)))))
+    (is (re-find #"Parens" html))
+    (testing "the shipped UI has no external scripts, styles, or fonts"
+      (is (not (re-find #"(?:src|href)=\"(?:https?:)?//" html))))))
+
+(deftest binary-assets-are-served-as-bytes
+  (let [response ((handler) (request :get "/fonts/ibm-plex-sans-latin-var.woff2"))
+        raw (:body response)]
+    (is (= 200 (:status response)))
+    (is (re-find #"font/woff2" (get-in response [:headers "content-type"])))
+    (is (bytes? raw))
+    (testing "woff2 magic bytes survive the round trip (slurp would corrupt them)"
+      (is (= [0x77 0x4F 0x46 0x32] (mapv #(bit-and (int %) 0xFF) (take 4 raw)))))))
 
 (deftest static-page-still-requires-a-valid-host
   (is (= 403 (:status ((handler) (request :get "/" {:headers {"host" "evil.example"}}))))))
+
+;; ---------------------------------------------------------------------------
+;; set-ns
+
+(deftest set-ns-selects-the-default-eval-namespace
+  (try
+    (let [response ((handler) (post-json "/api/set-ns" "{\"ns\":\"demo-course\"}" {:token token}))]
+      (is (= 200 (:status response)))
+      (is (= {:ok true :ns "demo-course"} (body response)))
+      (is (= "demo-course" (runtime/active-ns))))
+    (finally
+      (runtime/set-active-ns! "user"))))
+
+(deftest set-ns-rejects-invalid-namespaces
+  (doseq [payload ["{\"ns\":\"not a ns\"}"
+                   "{\"ns\":42}"
+                   "{}"]]
+    (let [response ((handler) (post-json "/api/set-ns" payload {:token token}))]
+      (is (= 400 (:status response)))
+      (is (false? (:ok (body response))))))
+  (is (= "user" (runtime/active-ns))))
 
 ;; ---------------------------------------------------------------------------
 ;; Token

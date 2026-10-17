@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#000000" />
+        <meta
+            name="description"
+            content="Parens — learn Clojure against a real local JVM."
+        />
+        <!-- Everything is served by the local JVM app: no CDN, no external
+             fonts, no analytics. The server's CSP is `default-src 'self'`. -->
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link
+            rel="icon"
+            type="image/png"
+            sizes="32x32"
+            href="/favicon-32x32.png"
+        />
+        <link
+            rel="preload"
+            href="/fonts/fraunces-latin-var.woff2"
+            as="font"
+            type="font/woff2"
+            crossorigin
+        />
+        <link
+            rel="preload"
+            href="/fonts/ibm-plex-sans-latin-var.woff2"
+            as="font"
+            type="font/woff2"
+            crossorigin
+        />
+        <link
+            rel="preload"
+            href="/fonts/jetbrains-mono-latin-var.woff2"
+            as="font"
+            type="font/woff2"
+            crossorigin
+        />
+        <link rel="stylesheet" href="/fonts.css" />
+        <title>Parens — Learn Clojure</title>
+        <!-- Apply the saved (or OS-preferred) theme before first paint so the
+             page never flashes the wrong theme while React boots. Mirrors the
+             effectiveThemeKey logic in src/context/AppContext.jsx. This is a
+             separate file, not an inline script, because the app is served
+             under `script-src 'self'`. -->
+        <script src="/theme-init.js"></script>
+    </head>
+    <body>
+        <noscript>You need to enable JavaScript to run this app.</noscript>
+        <div id="root"></div>
+        <script type="module" src="/src/index.jsx"></script>
+    </body>
+</html>

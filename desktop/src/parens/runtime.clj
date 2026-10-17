@@ -20,6 +20,10 @@
 (def ^:private eof (Object.))
 (def ^:private ready-timeout-ms 15000)
 (def ^:private timeout-ms* (atom 2000))
+;; The namespace an eval lands in when the request omits one. The UI sends the
+;; course namespace explicitly on every eval, so this is the API default
+;; (POST /api/set-ns changes it) rather than shared evaluation state.
+(def ^:private active-ns* (atom "user"))
 (def ^:private state (atom nil))
 (def ^:private lock (Object.))
 
@@ -27,6 +31,9 @@
                    pid ^File dir])
 
 (defn timeout-ms [] @timeout-ms*)
+
+(defn active-ns [] @active-ns*)
+(defn set-active-ns! [ns] (reset! active-ns* ns))
 
 (defn worker-pid [] (:pid @state))
 (defn set-timeout-ms! [ms] (reset! timeout-ms* (max 250 (long ms))))

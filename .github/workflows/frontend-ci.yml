@@ -1,0 +1,151 @@
+name: Frontend
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "frontend/**"
+      - "desktop/resources/public/**"
+      - ".github/workflows/frontend-ci.yml"
+  pull_request:
+    paths:
+      - "frontend/**"
+      - "desktop/resources/public/**"
+      - ".github/workflows/frontend-ci.yml"
+
+jobs:
+  build:
+    name: Vite build + committed bundle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: yarn install --frozen-lockfile
+
+      - name: Build into the desktop resources
+        working-directory: frontend
+        run: yarn build:desktop
+
+      - name: Check the bundle is self-contained
+        working-directory: frontend
+        run: yarn check:offline
+
+      # desktop/resources/public ships inside the uberjar and is committed so
+      # packaging jobs work from a plain checkout. Rebuilding must be a no-op;
+      # if it is not, the source changed without refreshing the artifact.
+      - name: Fail if the committed bundle is stale
+        working-directory: frontend
+        run: |
+          if [ -n "$(git status --porcelain -- ../desktop/resources/public)" ]; then
+            echo "::error::desktop/resources/public is stale. Run 'yarn build:desktop' in frontend/ and commit the result."
+            git status --short -- ../desktop/resources/public
+            exit 1
+          fi
+
+  content-audit:
+    name: Content audit (JVM)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: Install Leiningen
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein \
+            -o "$RUNNER_TEMP/lein"
+          chmod +x "$RUNNER_TEMP/lein"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: yarn install --frozen-lockfile
+
+      - name: Build the app
+        working-directory: desktop
+        run: lein uberjar
+
+      # Runs every lesson code block, exercise solution and cheat-sheet example
+      # in the worker. Fails on any failure not listed in
+      # frontend/content-audit-baseline.json, and on baseline entries that now
+      # pass (the list only shrinks as content is migrated).
+      - name: Audit all course content
+        working-directory: frontend
+        run: yarn audit:content --json "$RUNNER_TEMP/content-audit.json"
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: content-audit
+          path: ${{ runner.temp }}/content-audit.json
+          if-no-files-found: ignore
+
+  ui-smoke:
+    name: Browser smoke (JVM app)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: Install Leiningen
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein \
+            -o "$RUNNER_TEMP/lein"
+          chmod +x "$RUNNER_TEMP/lein"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: yarn install --frozen-lockfile
+
+      # playwright-core has no browser of its own; install the matching
+      # Chromium (and its system libraries) for the smoke test.
+      - name: Install Chromium
+        run: npx --yes playwright@1.64.1 install --with-deps chromium
+
+      - name: Build the app
+        working-directory: desktop
+        run: lein uberjar
+
+      - name: Run the browser smoke test
+        working-directory: frontend
+        run: yarn smoke --json "$RUNNER_TEMP/ui-smoke.json"
+
+      - name: Upload smoke results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ui-smoke
+          path: ${{ runner.temp }}/ui-smoke.json
+          if-no-files-found: ignore

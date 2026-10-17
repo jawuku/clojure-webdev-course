@@ -270,9 +270,10 @@ jobs:
           if-no-files-found: error
 
   macos-app-image:
-    name: macOS app-image
+    name: macOS app-image + .dmg
     runs-on: macos-latest
-    timeout-minutes: 25
+    # App image, the full check, then the dmg install and a second full check.
+    timeout-minutes: 40
     defaults:
       run:
         working-directory: desktop
@@ -316,11 +317,61 @@ jobs:
           path: ${{ runner.temp }}/appimage-macos-results.json
           if-no-files-found: ignore
 
+      # Package the image that just passed, rather than letting jpackage build
+      # a second, unsigned one. build_dmg.sh adds the /Applications symlink.
+      - name: Build .dmg
+        env:
+          APP_VERSION: "1.0.0"
+          SKIP_APPIMAGE: "1"
+        run: bash scripts/build_dmg.sh
+
+      - name: Install .dmg
+        run: |
+          set -euo pipefail
+          DMG=$(find target/dmg -maxdepth 1 -name '*.dmg' -print -quit)
+          if [ -z "$DMG" ]; then echo "no .dmg found" >&2; exit 1; fi
+          MOUNT="$RUNNER_TEMP/parens-dmg"
+          mkdir -p "$MOUNT"
+          hdiutil attach "$DMG" -nobrowse -readonly -mountpoint "$MOUNT" >/dev/null
+          sudo rm -rf /Applications/ParensPhase0.app
+          sudo ditto "$MOUNT/ParensPhase0.app" /Applications/ParensPhase0.app
+          hdiutil detach "$MOUNT" >/dev/null
+
+      - name: Check installed app
+        run: >-
+          node scripts/phase0_check.mjs
+          --command /Applications/ParensPhase0.app/Contents/MacOS/ParensPhase0
+          --json "$RUNNER_TEMP/dmg-macos-results.json"
+
+      - name: Uninstall app
+        if: always()
+        run: |
+          hdiutil detach "$RUNNER_TEMP/parens-dmg" 2>/dev/null || true
+          sudo rm -rf /Applications/ParensPhase0.app
+
+      - name: Upload .dmg
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: parens-dmg
+          path: desktop/target/dmg/*.dmg
+          if-no-files-found: ignore
+
+      - name: Upload .dmg check results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dmg-results-macos
+          path: ${{ runner.temp }}/dmg-macos-results.json
+          if-no-files-found: ignore
+
   windows-app-image:
-    name: Windows app-image
+    name: Windows app-image + .msi + .exe
     needs: uberjar
     runs-on: windows-latest
-    timeout-minutes: 25
+    # App image check, then an install/check/uninstall cycle for each of the
+    # MSI and EXE installers (each builds its own runtime).
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: desktop
@@ -362,6 +413,201 @@ jobs:
         with:
           name: appimage-results-windows
           path: ${{ runner.temp }}/appimage-windows-results.json
+          if-no-files-found: ignore
+
+      # jpackage needs candle.exe/light.exe for an .msi. The windows images
+      # usually carry WiX 3.x; install it through Chocolatey when they do not.
+      - name: Ensure WiX Toolset
+        shell: pwsh
+        run: |
+          $wix = Get-ChildItem "${env:ProgramFiles(x86)}\WiX Toolset*" -Directory -ErrorAction SilentlyContinue |
+            Where-Object { Test-Path (Join-Path $_.FullName 'bin\candle.exe') } |
+            Select-Object -First 1
+          if (-not $wix) {
+            choco install wixtoolset --yes --no-progress
+            $wix = Get-ChildItem "${env:ProgramFiles(x86)}\WiX Toolset*" -Directory |
+              Where-Object { Test-Path (Join-Path $_.FullName 'bin\candle.exe') } |
+              Select-Object -First 1
+          }
+          if (-not $wix) { throw 'WiX Toolset is not installed' }
+          $bin = Join-Path $wix.FullName 'bin'
+          Write-Host "WiX: $bin"
+          # jpackage finds candle.exe/light.exe on PATH.
+          $bin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Build .msi
+        shell: bash
+        env:
+          APP_VERSION: "1.0.0"
+          REBUILD_JAR: "0"
+        run: bash scripts/build_msi.sh
+
+      - name: Install .msi
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem target\msi\*.msi | Select-Object -First 1
+          if (-not $msi) { throw 'no .msi found' }
+          $log = Join-Path $env:RUNNER_TEMP 'msi-install.log'
+          $p = Start-Process msiexec.exe -ArgumentList @(
+            '/i', "`"$($msi.FullName)`"", '/qn', '/norestart', '/L*v', "`"$log`""
+          ) -Wait -PassThru
+          # 3010 means success with a pending reboot.
+          if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) {
+            Get-Content $log -Tail 80
+            throw "msiexec install failed ($($p.ExitCode))"
+          }
+          Write-Host "Installed $($msi.Name)"
+
+      - name: Locate installed launcher
+        id: installed
+        shell: pwsh
+        run: |
+          $candidates = @(
+            (Join-Path $env:ProgramFiles 'ParensPhase0\ParensPhase0.exe'),
+            (Join-Path $env:LOCALAPPDATA 'ParensPhase0\ParensPhase0.exe')
+          )
+          # msiexec can return before the files are on disk; give it time.
+          $deadline = (Get-Date).AddSeconds(90)
+          do {
+            $exe = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+            if ($exe) { break }
+            Start-Sleep -Seconds 3
+          } while ((Get-Date) -lt $deadline)
+          if (-not $exe) {
+            Get-ChildItem $env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:LOCALAPPDATA `
+              -Filter ParensPhase0.exe -Recurse -ErrorAction SilentlyContinue |
+              Select-Object -First 5 | ForEach-Object { Write-Host $_.FullName }
+            throw 'installed ParensPhase0.exe not found'
+          }
+          # The child evaluator is launched from the bundled runtime. If the
+          # bundler ever strips it, fail here with a clear message instead of
+          # inside the checker.
+          $javaExe = Join-Path (Split-Path $exe) 'runtime\bin\java.exe'
+          if (-not (Test-Path $javaExe)) {
+            throw "installed runtime has no java.exe at $javaExe"
+          }
+          # Forward slashes keep Git Bash from rewriting the path.
+          "exe=$($exe.Replace('\', '/'))" >> $env:GITHUB_OUTPUT
+          Write-Host "Installed launcher: $exe"
+
+      - name: Check installed app
+        shell: bash
+        run: >-
+          node scripts/phase0_check.mjs
+          --command "${{ steps.installed.outputs.exe }}"
+          --json "$RUNNER_TEMP/msi-windows-results.json"
+
+      - name: Uninstall .msi
+        if: always()
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem target\msi\*.msi -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($msi) {
+            $p = Start-Process msiexec.exe -ArgumentList @(
+              '/x', "`"$($msi.FullName)`"", '/qn', '/norestart'
+            ) -Wait -PassThru
+            Write-Host "msiexec uninstall exit $($p.ExitCode)"
+            $exe = '${{ steps.installed.outputs.exe }}'
+            if ($exe -and (Test-Path $exe)) {
+              throw "uninstall left $exe behind"
+            }
+          }
+
+      - name: Upload .msi
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: parens-msi
+          path: desktop/target/msi/*.msi
+          if-no-files-found: ignore
+
+      - name: Upload .msi check results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: msi-results-windows
+          path: ${{ runner.temp }}/msi-windows-results.json
+          if-no-files-found: ignore
+
+      - name: Build .exe
+        shell: bash
+        env:
+          APP_VERSION: "1.0.0"
+          REBUILD_JAR: "0"
+        run: bash scripts/build_exe.sh
+
+      # jpackage's .exe embeds an MSI and forwards its arguments to
+      # `msiexec /i`, so /quiet installs it silently.
+      - name: Install .exe
+        id: installed_exe
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem target\exe\*.exe | Select-Object -First 1
+          if (-not $installer) { throw 'no .exe installer found' }
+          $p = Start-Process $installer.FullName -ArgumentList '/quiet', '/norestart' -PassThru
+          if (-not $p.WaitForExit(600000)) { throw '.exe install did not finish' }
+          if ($p.ExitCode -ne 0 -and $p.ExitCode -ne 3010) {
+            throw ".exe install failed ($($p.ExitCode))"
+          }
+          Write-Host "Installed $($installer.Name)"
+          $candidates = @(
+            (Join-Path $env:ProgramFiles 'ParensPhase0\ParensPhase0.exe'),
+            (Join-Path $env:LOCALAPPDATA 'ParensPhase0\ParensPhase0.exe')
+          )
+          $deadline = (Get-Date).AddSeconds(90)
+          do {
+            $exe = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+            if ($exe) { break }
+            Start-Sleep -Seconds 3
+          } while ((Get-Date) -lt $deadline)
+          if (-not $exe) { throw 'installed ParensPhase0.exe not found' }
+          $javaExe = Join-Path (Split-Path $exe) 'runtime\bin\java.exe'
+          if (-not (Test-Path $javaExe)) {
+            throw "installed runtime has no java.exe at $javaExe"
+          }
+          "exe=$($exe.Replace('\', '/'))" >> $env:GITHUB_OUTPUT
+          Write-Host "Installed launcher: $exe"
+
+      - name: Check installed app (.exe)
+        shell: bash
+        run: >-
+          node scripts/phase0_check.mjs
+          --command "${{ steps.installed_exe.outputs.exe }}"
+          --json "$RUNNER_TEMP/exe-windows-results.json"
+
+      - name: Uninstall .exe
+        if: always()
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem target\exe\*.exe -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($installer) {
+            # A bare `uninstall` argument makes the wrapper remove the product
+            # silently using the product code embedded in it.
+            $p = Start-Process $installer.FullName -ArgumentList 'uninstall' -PassThru
+            if (-not $p.WaitForExit(600000)) { throw '.exe uninstall did not finish' }
+            Write-Host "uninstall exit $($p.ExitCode)"
+            $exe = '${{ steps.installed_exe.outputs.exe }}'
+            $deadline = (Get-Date).AddSeconds(60)
+            while ($exe -and (Test-Path $exe) -and (Get-Date) -lt $deadline) {
+              Start-Sleep -Seconds 3
+            }
+            if ($exe -and (Test-Path $exe)) { throw "uninstall left $exe behind" }
+          }
+
+      - name: Upload .exe
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: parens-exe
+          path: desktop/target/exe/*.exe
+          if-no-files-found: ignore
+
+      - name: Upload .exe check results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: exe-results-windows
+          path: ${{ runner.temp }}/exe-windows-results.json
           if-no-files-found: ignore
 
   end-to-end:

@@ -1,16 +1,17 @@
-# Parens desktop runtime — Phase 0 slice
+# Parens desktop app
 
-This is the disposable vertical slice from Phase 0 of
-[`docs/JVM_DESKTOP_MIGRATION_PLAN.md`](../docs/JVM_DESKTOP_MIGRATION_PLAN.md).
-It proves the architecture before the course UI is migrated:
+This is the local JVM app from [Phase 0](../docs/PHASE0_RESULTS.md) of
+[`docs/JVM_DESKTOP_MIGRATION_PLAN.md`](../docs/JVM_DESKTOP_MIGRATION_PLAN.md), now
+serving the real Vite UI from Phase 1:
 
 - A JVM app process serving a UI on `127.0.0.1` from a random port.
-- A token-protected HTTP API (`eval`, `exercise`, `runtime`, `reset`).
+- A token-protected HTTP API (`eval`, `exercise`, `set-ns`, `runtime`, `reset`).
 - A separate child JVM that evaluates real Clojure, killed and restarted on timeout.
 - A Linux `jpackage` app-image with no first-run downloads.
 
-It is **not** the final app. The page under `resources/public` is a small harness,
-not the course UI.
+`resources/public` is the built UI, copied there by `yarn build:desktop` in
+`frontend/` and committed so `lein uberjar` and the packaging jobs work from a plain
+checkout. CI fails if it is stale.
 
 ## Run
 
@@ -18,6 +19,9 @@ JDK 25 LTS is required. `project.clj` and the scripts fail with a clear error on
 any other Java version.
 
 ```bash
+# Build the UI first (after changing anything under frontend/)
+cd ../frontend && yarn install && yarn build:desktop && cd ../desktop
+
 lein uberjar
 ./scripts/run.sh                 # opens the browser
 ./scripts/run.sh --no-open       # prints the URL and token, for scripts/CI
@@ -44,14 +48,17 @@ All `/api/*` routes except `/api/health` require `X-Parens-Token`.
 | Method | Path | Body | Returns |
 | --- | --- | --- | --- |
 | GET | `/api/health` | — | `{ok, status, server-pid}` |
-| GET | `/api/runtime` | — | `{ok, pid, clojure, java, timeout-ms, server-pid}` |
+| GET | `/api/runtime` | — | `{ok, active-ns, pid, clojure, java, timeout-ms, server-pid}` |
+| POST | `/api/set-ns` | `{ns}` | `{ok, ns}` — default namespace for evals that omit `ns` |
 | POST | `/api/eval` | `{code, ns?}` | `{ok, value, output, error, ms}` or `{ok:false, timeout:true}` |
 | POST | `/api/exercise` | `{code, tests:[string]}` | `{ok, passed, results:[{test,ok,detail}], runError, output, ms}` |
 | POST | `/api/reset` | — | restarts the worker |
 
-`value` is `pr-str` of the last form. `output` captures `println`/`prn` and stderr.
-Exercise code runs in a fresh `exerciseN` namespace with `answer` bound to the
-last value, matching the current app's `runExerciseTests` semantics.
+`value` is `pr-str` of the last form. Code is read and evaluated one top-level form at a
+time (like a REPL), so `defprotocol`/`defrecord` definitions are visible to later forms.
+`output` captures `println`/`prn` and stderr. Errors include the compiler cause chain.
+Exercise code runs in a fresh `exerciseN` namespace with `answer` bound to the last value,
+matching the app's `runExerciseTests` semantics.
 
 ## Security model
 
@@ -59,7 +66,8 @@ last value, matching the current app's `runExerciseTests` semantics.
 - `Host` must be `127.0.0.1`/`localhost` (blocks DNS rebinding).
 - `Origin`, when present, must be the local app origin; no CORS headers.
 - `Sec-Fetch-Site`, when present, must be `same-origin` or `none`.
-- Strict CSP on the static page; no inline scripts or styles.
+- Strict CSP on the static page; no inline scripts. `style-src` allows inline
+  styles because CodeMirror injects its theme into a `<style>` element at runtime.
 - Body size limit and code length limit.
 
 The evaluator is **not a sandbox**. Learner code is trusted local code: it can
@@ -158,20 +166,120 @@ post-processing, so the bundled runtime is packaged unchanged. `RPM_MAINTAINER`,
 `APP_VERSION`, `APP_IMAGE_NAME`, and `RPM_RELEASE` override the defaults. Tested on
 Fedora 43 x86_64; see [`docs/PHASE0_RESULTS.md`](../docs/PHASE0_RESULTS.md). The
 `fedora-rpm` job in `.github/workflows/desktop-ci.yml` repeats the build, tests, and
-install check in a `fedora:43` container on GitHub Actions; it passes 28/28.
+install check in a `fedora:43` container on GitHub Actions; it passes 31/31.
+
+## macOS .dmg
+
+```bash
+bash scripts/build_dmg.sh                            # builds the app image first
+hdiutil attach target/dmg/ParensPhase0-1.0.0-*.dmg   # drag the app to Applications
+```
+
+The script packages the app image from `scripts/build_appimage.sh` with `hdiutil`
+(the `.app` plus an `/Applications` symlink) instead of running
+`jpackage --type dmg`, so the image keeps the `bin/java` fix and the ad-hoc
+signature. Set `SKIP_APPIMAGE=1` to reuse an image that was already built and
+checked. `APP_VERSION` defaults to `1.0.0` because jpackage rejects a macOS
+bundle version starting with zero (the jar stays `0.1.0`); the script refuses to
+package an app image whose `CFBundleShortVersionString` differs. Local builds are
+ad-hoc signed; signing and notarization for release are below.
+
+## Windows .msi and .exe
+
+```bash
+# Git Bash; WiX Toolset (candle.exe/light.exe) must be on PATH
+bash scripts/build_msi.sh
+bash scripts/build_exe.sh
+msiexec /i target/msi/ParensPhase0-1.0.0.msi
+```
+
+jpackage has no way to package an existing app image as an `.msi`/`.exe`, so
+these run `jpackage --type msi` / `--type exe` and build the runtime again.
+Unlike Linux, jpackage keeps `runtime/bin/java.exe` in the Windows runtime,
+which the child evaluator needs; the installed-package check fails if it is
+missing. `--win-console` is required for the launcher handshake, so the
+installed app opens a console window. `REBUILD_JAR=0` reuses an existing
+`target/parens-desktop.jar`. `APP_NAME`, `APP_VERSION`, and `REBUILD_JAR`
+override the defaults. Both scripts share `scripts/win_common.sh`; their
+output goes to `target/msi` and `target/exe`.
+
+The `.exe` is jpackage's wrapper (`msiwrapper.exe`) with the `.msi` embedded:
+it forwards its arguments to `msiexec /i`, so `/quiet /norestart` installs it
+silently, and a bare `uninstall` argument removes the product silently using
+the embedded product code. That is how CI exercises it.
+
+## Signing and notarization
+
+Signing lives in `.github/workflows/desktop-release.yml`, not in pull-request CI, so
+PRs never need certificates. The release workflow runs on `workflow_dispatch` or a
+`desktop-v*` tag and fails early with the names of any missing secrets.
+
+| Secret | Used for |
+| --- | --- |
+| `APPLE_SIGNING_IDENTITY` | `codesign` identity, e.g. `Developer ID Application: Name (TEAMID)` |
+| `APPLE_CERT_P12_BASE64` | base64 of the Developer ID Application `.p12` |
+| `APPLE_CERT_PASSWORD` | password for that `.p12` |
+| `APPLE_NOTARY_KEY_P8_BASE64` | base64 of the App Store Connect API key (`AuthKey_<id>.p8`) |
+| `APPLE_NOTARY_KEY_ID` | API key ID |
+| `APPLE_NOTARY_KEY_ISSUER` | App Store Connect issuer UUID |
+| `WINDOWS_CERT_PFX_BASE64` | base64 of the Authenticode code-signing `.pfx` |
+| `WINDOWS_CERT_PASSWORD` | password for that `.pfx` |
+
+The workflow runs this check first; it also works locally and names every missing
+variable:
+
+```bash
+bash scripts/require_release_secrets.sh macos
+bash scripts/require_release_secrets.sh windows
+```
+
+macOS signing imports the certificate into a throwaway keychain, signs every Mach-O
+file in the bundle (the app launcher, the worker launcher, and the bundled
+`bin/java`, which all host a JVM, get `packaging/entitlements.plist`), then signs the
+bundle with the hardened runtime and a secure timestamp. Notarization submits a
+`.app` as a zip, staples the bundle, and verifies it with `spctl`; the `.dmg` is then
+built from the stapled app, signed, notarized and stapled as well.
+
+```bash
+bash scripts/sign_macos.sh target/jpackage/ParensPhase0.app
+bash scripts/notarize_macos.sh target/jpackage/ParensPhase0.app
+SKIP_APPIMAGE=1 APP_VERSION=1.0.0 bash scripts/build_dmg.sh
+bash scripts/sign_macos.sh target/dmg/*.dmg
+bash scripts/notarize_macos.sh target/dmg/*.dmg
+```
+
+Windows signing uses `signtool` with SHA-256 and an RFC 3161 timestamp, then verifies
+each file with `signtool verify /pa` — the assessment SmartScreen and the installer
+make. The app-image launchers and the `.msi`/`.exe` installers are signed. jpackage
+builds a fresh app image for each installer, so the launchers inside an installed
+copy are not individually signed; the installer signature covers delivery.
+
+```bash
+bash scripts/sign_windows.sh target/jpackage/ParensPhase0/ParensPhase0.exe \
+  target/jpackage/ParensPhase0/ParensWorker.exe
+bash scripts/sign_windows.sh target/msi/*.msi target/exe/*.exe
+```
+
+`SIGNTOOL`, `WINDOWS_TIMESTAMP_URL`, `PARENS_KEYCHAIN`, and `ENTITLEMENTS` override
+the defaults. Nothing here is a sandbox: the entitlements are the standard JVM set
+for the hardened runtime, not App Sandbox.
 
 ## CI
 
 `.github/workflows/desktop-ci.yml` builds and checks the app image on Ubuntu 24.04,
 Ubuntu 26.04, macOS (arm64), and Windows (x64), plus the `.deb` and `.rpm`; every job
-runs the same 28-check suite. The macOS and Windows jobs produce app images, not
-native installers: `.dmg`/`.msi`/`.exe` packaging and code signing are still open.
+runs the same 31-check suite. The macOS job also builds a `.dmg`, installs the app
+into `/Applications`, and re-runs the checks against that copy. The Windows job
+builds an `.msi` and an `.exe`, installs each in turn, checks the installed launcher
+against the same 31 checks, and uninstalls it. Those artifacts are unsigned;
+`desktop-release.yml` produces the signed and notarized ones.
 
 ## Known limitations
 
 - Linux installers validated on Ubuntu 24.04 and Fedora 43 x86_64 under `proot`;
-  macOS arm64 and Windows x64 app images are built and checked only in CI.
-  `.dmg`/`.msi`/`.exe` installers and code signing are untested.
+  macOS arm64 and Windows x64 app images and the `.dmg`/`.msi`/`.exe` installers are
+  built and checked only in CI. Signing and notarization need certificates and are
+  exercised only by `desktop-release.yml`; they have not run without them.
 - JDK 25 LTS is pinned in `project.clj`, `scripts/run.sh`, and the app-image
   build. Measured on GraalVM CE 25.0.2 (NixOS) and Temurin 25.0.4.1 (Ubuntu
   24.04 under `proot`, and all CI app images).
@@ -179,7 +287,9 @@ native installers: `.dmg`/`.msi`/`.exe` packaging and code signing are still ope
 - Timeout loses REPL/namespace state in the worker.
 - Direct writes to `System/out` (rather than `println`) can corrupt the worker
   protocol; the parent treats that as a crash and restarts.
-- The UI is a Phase 0 harness, and no browser was available here, so the check
-  verifies the served page and the API rather than a rendered UI.
+- The Phase 0 check verifies the served page and the API, not a rendered UI. The
+  rendered UI is covered by `frontend/scripts/smoke.mjs` (`yarn smoke`), which drives
+  Chromium through all 74 lessons against the built jar.
 
-Measured results: [`docs/PHASE0_RESULTS.md`](../docs/PHASE0_RESULTS.md).
+Measured results: [`docs/PHASE0_RESULTS.md`](../docs/PHASE0_RESULTS.md) and
+[`docs/PHASE1_RESULTS.md`](../docs/PHASE1_RESULTS.md).

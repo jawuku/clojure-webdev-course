@@ -10,7 +10,7 @@ import { SearchDialog } from "@/components/SearchDialog";
 import { CheatSheet } from "@/components/CheatSheet";
 import { CourseComplete } from "@/components/CourseComplete";
 import { COURSES, getCourseById, DEFAULT_COURSE_ID } from "@/course";
-import { waitForSci, sciReady, setCourseNs } from "@/lib/sci";
+import { waitForRuntime, runtimeReady, setCourseNs } from "@/lib/runtime";
 import { debug } from "@/lib/log";
 import { Menu, X } from "lucide-react";
 
@@ -48,7 +48,10 @@ function Shell({ courses, activeCourseId, onSwitchCourse }) {
   const init = readInitialState(course, lastLocation);
   const [view, setView] = useState(init.view);
   const [current, setCurrent] = useState(init.current);
-  const [ready, setReady] = useState(sciReady());
+  // "starting" -> the local JVM is booting; "ready" -> evals can run;
+  // "unreachable" -> the UI still reads fine, but Run/Check need the server.
+  const [runtime, setRuntime] = useState(runtimeReady() ? "ready" : "starting");
+  const ready = runtime === "ready";
   const [mobileNav, setMobileNav] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -56,11 +59,13 @@ function Shell({ courses, activeCourseId, onSwitchCourse }) {
   const nextCourse = courseIdx >= 0 ? courses[courseIdx + 1] : undefined;
 
   useEffect(() => {
-    if (!ready) waitForSci().then(setReady);
+    if (ready) return;
+    waitForRuntime().then((ok) => setRuntime(ok ? "ready" : "unreachable"));
   }, [ready]);
 
   // Once the runtime is ready, make sure the active course's namespace is
-  // applied (it may not have been when the course mounted, before SCI loaded).
+  // applied (it may not have been when the course mounted, before the server
+  // answered).
   useEffect(() => {
     if (ready && course) setCourseNs(course.ns);
   }, [ready, course]);
@@ -171,9 +176,16 @@ function Shell({ courses, activeCourseId, onSwitchCourse }) {
           <Topbar title={title} getShareUrl={getShareUrl} />
         </div>
 
-        {!ready && (
-          <div className="sci-loading" data-testid="sci-loading">
-            Loading the in-browser ClojureScript runtime…
+        {runtime === "starting" && (
+          <div className="runtime-status" data-testid="runtime-loading">
+            Starting the local Clojure runtime…
+          </div>
+        )}
+        {runtime === "unreachable" && (
+          <div className="runtime-status" data-testid="runtime-unreachable" role="alert">
+            The evaluation runtime is not reachable. Lessons stay readable, but Run and
+            Check answer need the Parens app server — relaunch Parens or run
+            desktop/scripts/run.sh.
           </div>
         )}
 

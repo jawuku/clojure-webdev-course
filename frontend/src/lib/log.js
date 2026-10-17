@@ -2,9 +2,9 @@
 // output ships to production, while still surfacing diagnostics during
 // development (used in place of silent empty catch blocks).
 export function debug(...args) {
-  if (typeof process !== "undefined" && process.env && process.env.NODE_ENV === "production") {
-    return;
-  }
+  // Vite replaces import.meta.env.PROD at build time; `process` is not defined
+  // in the browser, so the old process.env check always logged.
+  if (import.meta.env.PROD) return;
   // eslint-disable-next-line no-console
   console.debug(...args);
 }

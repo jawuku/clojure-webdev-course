@@ -11,8 +11,15 @@
 (def ^:private exercise-counter (atom 0))
 
 (defn- clean-error [^Throwable t]
-  (let [message (or (.getMessage t) (str t))]
-    (str (.getName (class t)) ": " message)))
+  ;; CompilerException only says "Syntax error compiling at (0:0)"; the useful
+  ;; message (unresolved symbol, bad arity, ...) is in the cause chain.
+  (->> (iterate #(.getCause ^Throwable %) t)
+       (take-while some?)
+       (map (fn [^Throwable cause]
+              (str (.getName (class cause)) ": "
+                   (or (.getMessage cause) (str cause)))))
+       distinct
+       (str/join "\n  caused by: ")))
 
 (defn- capture
   "Run f with stdout/stderr captured. Returns {:result v :output s} or
@@ -40,10 +47,24 @@
       (require '[clojure.set :as set]))
     ns-object))
 
+(defn- read-forms [code]
+  (with-open [reader (java.io.PushbackReader. (java.io.StringReader. (str code)))]
+    (loop [forms []]
+      (let [form (read {:eof ::eof :read-cond :allow} reader)]
+        (if (identical? ::eof form)
+          forms
+          (recur (conj forms form)))))))
+
+(defn- eval-forms [code]
+  ;; Evaluate top-level forms one at a time, like a real REPL. Compiling them as
+  ;; one `(do ...)` makes `(defprotocol P ...) (defrecord R ... P ...)` fail,
+  ;; because R is compiled before P exists at runtime.
+  (reduce (fn [_ form] (eval form)) nil (read-forms code)))
+
 (defn- eval-in [ns-name code]
   (let [ns-object (prepare-ns! ns-name)]
     (binding [*ns* ns-object]
-      (eval (read-string (str "(do " code "\n)"))))))
+      (eval-forms code))))
 
 (defn- eval-code [ns-name code]
   (let [{:keys [result error output]} (capture #(pr-str (eval-in ns-name code)))]
@@ -56,7 +77,10 @@
         ns-object (prepare-ns! ns-name)]
     (binding [*ns* ns-object]
       (try
-        (eval (read-string (str "(def answer (do\n" code "\n))")))
+        ;; Bind `answer` to the last form's value, after every form has run, so
+        ;; protocol/record definitions defined earlier in the answer exist at
+        ;; compile time and `answer` keeps its established meaning.
+        (intern ns-object 'answer (eval-forms code))
         (let [results (mapv (fn [test]
                               (try
                                 (let [value (eval (read-string test))

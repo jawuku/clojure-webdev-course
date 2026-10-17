@@ -168,6 +168,37 @@ Platform handling this required:
 - macOS app images are ad-hoc signed (`codesign --sign -`), which Apple silicon
   requires before it executes them.
 
+## macOS `.dmg`, Windows `.msi` and `.exe`
+
+Native installers are now built by CI as well as the app images:
+
+| Installer | Script | CI job | Install check |
+| --- | --- | --- | --- |
+| macOS `.dmg` (arm64) | `desktop/scripts/build_dmg.sh` | `macos-app-image` | mounts the dmg, copies `ParensPhase0.app` to `/Applications`, runs the 28 checks against it, removes it |
+| Windows `.msi` (x64) | `desktop/scripts/build_msi.sh` | `windows-app-image` | `msiexec /i /qn`, runs the 28 checks against the installed launcher, `msiexec /x /qn` |
+| Windows `.exe` (x64) | `desktop/scripts/build_exe.sh` | `windows-app-image` | `<exe> /quiet /norestart`, runs the 28 checks, `<exe> uninstall` |
+
+The `.dmg` is built from the app image that already passed, with `hdiutil`, so it
+keeps the `bin/java` fix and whatever signature that image carries (ad-hoc by
+default, Developer ID in the release workflow). The `.msi` and `.exe` cannot reuse
+the app image — jpackage has no "package this image" mode — so they are built with
+`jpackage --type msi` and `--type exe`, and both need the WiX Toolset on `PATH`. The
+Windows runtime keeps `runtime/bin/java.exe` (jpackage strips native commands on
+Linux only), and the installed-package check fails if the child evaluator cannot
+start.
+
+jpackage's `.exe` is `msiwrapper.exe` with the `.msi` embedded. It forwards its
+arguments to `msiexec /i`, so `/quiet /norestart` installs silently, and a single
+`uninstall` argument removes the product silently with the embedded product code —
+that is what CI uses, and it means the `.exe` needs no separate uninstaller script.
+
+Signing and notarization are wired into `.github/workflows/desktop-release.yml`,
+which runs on `workflow_dispatch` or a `desktop-v*` tag: macOS signs the app bundle
+with a Developer ID, notarizes and staples it, builds the dmg from the stapled app,
+then signs/notarizes/staples the dmg; Windows signs the launchers with `signtool` and
+signs both installers. The required secret names are listed in
+`scripts/require_release_secrets.sh`.
+
 ## Checks (28/28 passed on the uberjar, app-image, .deb, and .rpm)
 
 **Boot and serving**
@@ -224,14 +255,23 @@ Platform handling this required:
 
 ## Limitations
 
-- **Linux installers and all app images.** `.deb` (Ubuntu 24.04) and `.rpm`
-  (Fedora 43) are built, installed, and checked on x86_64. App images also build and
-  pass on Ubuntu 24.04/26.04, macOS arm64, and Windows x64 in CI; `.dmg`, `.msi`, and
-  `.exe` installers are not built yet, and other distributions remain untested.
+- **Installers.** `.deb` (Ubuntu 24.04) and `.rpm` (Fedora 43) are built, installed,
+  and checked on x86_64. App images build and pass on Ubuntu 24.04/26.04, macOS arm64,
+  and Windows x64 in CI. The macOS `.dmg` and the Windows `.msi`/`.exe` are built,
+  installed, and checked in CI; other distributions remain untested. The installers
+  are unsigned unless the release workflow signs them (see below).
 - **Local validation on Ubuntu 24.04 and Fedora 43**, both under `proot` rather than a
   VM. `bin/java` had to be copied on both; zlib bundling was needed only on NixOS.
-  macOS and Windows were exercised only by CI app images, not by an install or a
+  macOS and Windows were exercised only by CI (app images and installers), not by a
   desktop session.
+- **Signing.** Local and pull-request artifacts are ad-hoc signed (macOS) or
+  unsigned (Windows, `.deb`, `.rpm`). `desktop-release.yml` signs and notarizes them
+  when the certificate secrets are configured; without them it stops at the preflight
+  and names the missing variables. The signed/notarized path has not been run here,
+  because no certificates are available in this environment.
+- **Windows console.** The launcher is built with `--win-console` (app image and
+  `.msi`) so the handshake has stdout; the installed app therefore opens a console
+  window alongside the browser.
 - **JDK 25 LTS pinned.** `project.clj`, `scripts/run.sh`, and the app-image build reject
   any other Java version. Measured on GraalVM CE 25.0.2 (NixOS) and Temurin 25.0.4.1
   (Ubuntu, macOS, and Windows). `jpackage`'s runtime can omit native commands, which is
@@ -244,8 +284,8 @@ Platform handling this required:
   the served HTML, CSP, and every API path; it does not execute the UI JavaScript.
 - **Protocol edge cases.** Direct `System/out` writes or `alter-var-root` on `*out*` can
   corrupt the EDN channel; the parent detects the protocol error and restarts.
-- **Static UI is a harness.** The real course UI is still the CRA app; Vite migration is
-  Phase 1.
+- **Static UI is a harness.** *(Superseded by Phase 1: the harness is gone and the Vite
+  UI ships in `desktop/resources/public`. See `PHASE1_RESULTS.md`.)*
 
 ## Reproduce
 

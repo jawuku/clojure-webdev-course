@@ -149,8 +149,9 @@ if [ "$PLATFORM" = linux ] &&
 fi
 
 # Apple silicon refuses to execute unsigned code. jpackage does not sign the
-# app image it builds, so ad-hoc sign it here; the signing identity can be
-# replaced later for notarized releases.
+# app image it builds, so ad-hoc sign it here. scripts/sign_macos.sh replaces
+# this signature with a Developer ID identity (and the hardened runtime) for
+# release builds.
 if [ "$PLATFORM" = mac ] && command -v codesign >/dev/null 2>&1; then
   codesign --force --deep --sign - "$APP_DIR"
   echo "Ad-hoc signed: $APP_DIR"

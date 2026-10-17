@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Play, Trash2, TerminalSquare, RotateCcw, Keyboard } from "lucide-react";
 import { CodeEditor } from "./CodeEditor";
-import { evalClojure, getCourseNs } from "../lib/sci";
+import { evalClojure, getCourseNs } from "../lib/runtime";
 import { useApp } from "../context/AppContext";
 import { useCourse } from "../context/CourseContext";
 
@@ -24,6 +24,7 @@ export function Repl() {
   const WELCOME = (course && course.replWelcome) || DEFAULT_WELCOME;
   const [source, setSource] = useState(WELCOME);
   const [history, setHistory] = useState([]);
+  const [pending, setPending] = useState(false);
   const [showCheat, setShowCheat] = useState(false);
   const scrollRef = useRef(null);
 
@@ -31,12 +32,19 @@ export function Repl() {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [history]);
 
-  const run = () => {
+  const run = async () => {
     const code = source.trim();
-    if (!code) return;
-    const r = evalClojure(code);
-    setHistory((h) => [...h, { code, ...r }]);
+    if (!code || pending) return;
+    const entry = { code, pending: true };
+    setHistory((h) => [...h, entry]);
     setSource("");
+    setPending(true);
+    try {
+      const result = await evalClojure(code);
+      setHistory((h) => h.map((item) => (item === entry ? { code, ...result } : item)));
+    } finally {
+      setPending(false);
+    }
   };
 
   const clear = () => setHistory([]);
@@ -84,7 +92,9 @@ export function Repl() {
           <div className="repl-entry" key={i}>
             <pre className="repl-input"><span className="repl-prompt">{getCourseNs()}=&gt;</span> {h.code}</pre>
             {h.output && <pre className="out-line out-print">{h.output}</pre>}
-            {h.ok ? (
+            {h.pending ? (
+              <pre className="out-line out-value">Running…</pre>
+            ) : h.ok ? (
               <pre className="out-line out-value">{h.value}</pre>
             ) : (
               <pre className="out-line out-error">{h.error}</pre>
@@ -105,8 +115,8 @@ export function Repl() {
             showLineNumbers
           />
         </div>
-        <button className="run-btn repl-run" onClick={run} data-testid="repl-run">
-          <Play size={14} /> Run <kbd>⌘↵</kbd>
+        <button className="run-btn repl-run" onClick={run} disabled={pending} data-testid="repl-run">
+          <Play size={14} /> {pending ? "Running…" : "Run"} <kbd>⌘↵</kbd>
         </button>
       </div>
     </div>

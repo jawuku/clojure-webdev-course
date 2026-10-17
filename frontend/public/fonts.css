@@ -1,0 +1,27 @@
+/* Self-hosted fonts: the app must make zero network requests after launch.
+   Each family is a single latin subset variable font (weights 400-700), so a
+   font-weight range covers every weight the UI uses. */
+
+@font-face {
+    font-family: "Fraunces";
+    font-style: normal;
+    font-weight: 500 700;
+    font-display: swap;
+    src: url("fonts/fraunces-latin-var.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "IBM Plex Sans";
+    font-style: normal;
+    font-weight: 400 600;
+    font-display: swap;
+    src: url("fonts/ibm-plex-sans-latin-var.woff2") format("woff2");
+}
+
+@font-face {
+    font-family: "JetBrains Mono";
+    font-style: normal;
+    font-weight: 400 700;
+    font-display: swap;
+    src: url("fonts/jetbrains-mono-latin-var.woff2") format("woff2");
+}

@@ -13,9 +13,11 @@ The original product requirements document for the multi-course learning app
 
 - The **original problem statement** (a beginner Web Development with
   ClojureScript course building on the existing Clojure course).
-- The **architecture** (React 19 / CRA+CRACO, SCI/Scittle in-browser
-  evaluation, the reusable `buildCourse` course engine, per-course SCI
-  namespaces).
+- The **architecture** at the time it was written (React 19 / CRA+CRACO,
+  SCI/Scittle in-browser evaluation, the reusable `buildCourse` engine,
+  per-course namespaces). The app has since moved to a Vite build and a local
+  JVM runtime; see `PHASE1_RESULTS.md` and `JVM_DESKTOP_MIGRATION_PLAN.md` for
+  the current design.
 - The **user personas** and core requirements.
 - A **what's-been-implemented** history, including the notable decisions:
   the React 17 → 18 upgrade for live Reagent rendering, merging the standalone
@@ -41,10 +43,11 @@ development. Each report captures:
 - links to any screenshots captured at the time.
 
 The reports are **historical artifacts** — chronological snapshots of the QA
-process, not a current test suite. The *ongoing* automated checks live in
-`frontend/scripts/audit-*.mjs`, which run on CI (see
-`.github/workflows/cheat-audit.yml`) and verify every lesson snippet, exercise,
-cheat-sheet example and live Reagent block still works.
+process, not a current test suite. The current checks are the Vite build guards
+(`yarn check:offline`), the browser smoke test (`frontend/scripts/smoke.mjs`,
+run by `.github/workflows/frontend-ci.yml`) and the JVM security/worker suite.
+The older `frontend/scripts/audit-*.mjs` scripts are parked: they drove
+Scittle in a browser and are replaced by the Clojure content audit in Phase 2.
 
 ### `test_result.md` (removed)
 

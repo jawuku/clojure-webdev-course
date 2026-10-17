@@ -1,82 +1,57 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Parens — Phase 0 slice</title>
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="/style.css" />
-  </head>
-  <body>
-    <div class="shell">
-      <header class="top">
-        <div class="brand">
-          <span class="mark">( )</span>
-          <div>
-            <h1>Parens</h1>
-            <p>Phase 0 vertical slice</p>
-          </div>
-        </div>
-        <div id="runtime-pill" class="pill">worker: loading…</div>
-      </header>
-
-      <main>
-        <section class="card">
-          <div class="card-head">
-            <h2>Runtime</h2>
-            <button id="refresh-runtime" class="ghost" type="button">Refresh</button>
-          </div>
-          <pre id="runtime-info" class="mono muted">Loading…</pre>
-        </section>
-
-        <section class="card">
-          <div class="card-head">
-            <h2>Evaluate on the JVM</h2>
-            <span id="eval-ms" class="badge"></span>
-          </div>
-          <textarea id="code" class="editor" spellcheck="false">(println "Hello, JVM!")
-(+ 1 2)</textarea>
-          <div class="actions">
-            <button id="run" class="primary" type="button">Run</button>
-            <button id="timeout" class="ghost" type="button">Timeout + recover</button>
-            <button id="crash" class="ghost" type="button">Kill worker + recover</button>
-            <button id="reset" class="ghost" type="button">Restart worker</button>
-          </div>
-          <div id="result" class="result" aria-live="polite"></div>
-        </section>
-
-        <section class="card">
-          <div class="card-head">
-            <h2>Exercise check</h2>
-            <span class="badge">fresh ns · answer bound</span>
-          </div>
-          <textarea id="exercise-code" class="editor small" spellcheck="false">(defn twice [x]
-  (* 2 x))</textarea>
-          <pre id="exercise-tests" class="mono muted">tests: (= (twice 2) 4), (= (twice 0) 0)</pre>
-          <div class="actions">
-            <button id="check" class="primary" type="button">Check answer</button>
-          </div>
-          <div id="exercise-result" class="result" aria-live="polite"></div>
-        </section>
-
-        <section class="card">
-          <div class="card-head">
-            <h2>Token check</h2>
-            <span id="token-state" class="badge"></span>
-          </div>
-          <p class="muted">
-            Every <code>/api</code> call needs the per-launch token. It arrives in the URL
-            fragment and is sent as <code>X-Parens-Token</code>.
-          </p>
-          <div class="actions">
-            <button id="no-token" class="ghost" type="button">Call without token</button>
-          </div>
-          <div id="token-result" class="result" aria-live="polite"></div>
-        </section>
-      </main>
-
-      <footer>Phase 0: loopback HTTP · child JVM eval · kill-on-timeout</footer>
-    </div>
-    <script src="/app.js"></script>
-  </body>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#000000" />
+        <meta
+            name="description"
+            content="Parens — learn Clojure against a real local JVM."
+        />
+        <!-- Everything is served by the local JVM app: no CDN, no external
+             fonts, no analytics. The server's CSP is `default-src 'self'`. -->
+        <link rel="icon" href="/favicon.ico" sizes="any" />
+        <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+        <link
+            rel="icon"
+            type="image/png"
+            sizes="32x32"
+            href="/favicon-32x32.png"
+        />
+        <link
+            rel="preload"
+            href="/fonts/fraunces-latin-var.woff2"
+            as="font"
+            type="font/woff2"
+            crossorigin
+        />
+        <link
+            rel="preload"
+            href="/fonts/ibm-plex-sans-latin-var.woff2"
+            as="font"
+            type="font/woff2"
+            crossorigin
+        />
+        <link
+            rel="preload"
+            href="/fonts/jetbrains-mono-latin-var.woff2"
+            as="font"
+            type="font/woff2"
+            crossorigin
+        />
+        <link rel="stylesheet" href="/fonts.css" />
+        <title>Parens — Learn Clojure</title>
+        <!-- Apply the saved (or OS-preferred) theme before first paint so the
+             page never flashes the wrong theme while React boots. Mirrors the
+             effectiveThemeKey logic in src/context/AppContext.jsx. This is a
+             separate file, not an inline script, because the app is served
+             under `script-src 'self'`. -->
+        <script src="/theme-init.js"></script>
+      <script type="module" crossorigin src="/assets/index-lSK71o_4.js"></script>
+      <link rel="stylesheet" crossorigin href="/assets/index-DQ5oeVxt.css">
+    </head>
+    <body>
+        <noscript>You need to enable JavaScript to run this app.</noscript>
+        <div id="root"></div>
+    </body>
 </html>

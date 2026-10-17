@@ -1,12 +1,12 @@
 import { useState, useMemo } from "react";
 import { Play, Search, BookMarked } from "lucide-react";
-import { evalClojure } from "../lib/sci";
+import { evalClojure } from "../lib/runtime";
 import { useCourse } from "../context/CourseContext";
 
 function CheatRow({ item }) {
   const [result, setResult] = useState(null);
 
-  const run = () => setResult(evalClojure(item.example));
+  const run = async () => setResult(await evalClojure(item.example));
 
   return (
     <div className="cheat-item" data-testid="cheat-item">

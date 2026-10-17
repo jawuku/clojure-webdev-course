@@ -610,7 +610,7 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
-.sci-loading {
+.runtime-status {
   background: color-mix(in srgb, var(--yellow) 16%, transparent);
   color: var(--fg);
   font-size: 13px;

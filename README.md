@@ -1,16 +1,16 @@
-# Parens — Learn Clojure & ClojureScript in the Browser
+# Parens — Learn Clojure on a Local JVM
 
 An interactive, **multi-course** learning platform that teaches **Clojure**, then
 **Web Development with ClojureScript**, plus a standalone **Regular Expressions** course,
 to complete beginners. Every lesson is written in plain English, code examples are
-syntax-highlighted, and **all code runs entirely in your browser** — there is no backend
-and no server required to evaluate code.
+syntax-highlighted, and **code runs in a real JVM inside the app** — not in a browser
+sandbox, and with no network connection once the app has launched.
 
 - **Course 1 — Parens · Learn Clojure:** 37 lessons from first principles (values,
   functions, collections, higher-order functions, recursion, macros/protocols).
 - **Course 2 — Hiccup · Web Dev with ClojureScript:** 19 lessons that build on Course 1 —
   the design of the WWW, HTML/CSS/JS, ClojureScript & JS interop, **Hiccup**, and
-  **live, in-browser Reagent components** (state, events, forms) culminating in a to-do app.
+  **Reagent components** (state, events, forms) culminating in a to-do app.
 - **Course 3 — Regex · Master Regular Expressions:** 18 lessons taught through Clojure's
   regex tools (`re-find`, `re-seq`, `re-matches`, `str/replace`), covering everything from
   literals to lookarounds, named groups and a live **Regex Golf leaderboard**.
@@ -18,10 +18,16 @@ and no server required to evaluate code.
 Switch between courses any time with the **course switcher** in the sidebar. Progress,
 theme and last position are saved **per course** in `localStorage`.
 
-Clojure(Script) is executed locally with the **[Small Clojure Interpreter (SCI)](https://github.com/babashka/sci)**,
-loaded via the **[Scittle](https://github.com/babashka/scittle)** runtime from a CDN.
-The Web Dev course additionally loads **React 18 + the Scittle Reagent plugin** to render
-live components in the page.
+Parens is a desktop app: a small Clojure server binds to **127.0.0.1**, serves the Vite
+UI, and forwards learner code to a separate, killable **worker JVM**. Every API call
+carries a per-launch token, and the server refuses foreign Host/Origin requests. The app
+ships its own fonts and assets; there is no CDN and no analytics.
+
+> **Migration status:** Phases 0 (JVM slice), 1 (Vite UI) and 2 (runtime API + content
+> audit) are complete. The audit tracks 44 known JavaScript-era snippets/exercises in
+> `frontend/content-audit-baseline.json`; they are migrated in Phases 3–5. Live Reagent
+> previews stay read-only until the JVM UI runtime lands in Phase 4. See
+> [docs/JVM_DESKTOP_MIGRATION_PLAN.md](docs/JVM_DESKTOP_MIGRATION_PLAN.md).
 
 ---
 
@@ -29,164 +35,137 @@ live components in the page.
 
 - **Three courses in one UI** (74 lessons total) with a sidebar course switcher.
 - **Runnable, editable code** in every lesson — press **Run** (or `Ctrl/Cmd + Enter`).
-- **Live Reagent components** in the Web Dev course — edit ClojureScript and see the
-  rendered UI update instantly (rendered with React 18's `createRoot`).
 - **Auto-checked exercises** that accept *any* correct solution, each evaluated in an
-  isolated namespace.
+  isolated namespace in the worker JVM.
 - **Interactive REPL playground** with history and a keyboard-shortcut cheatsheet.
 - **Reference Cheat Sheet** per course with click-to-run examples.
 - **Full-text search** across lesson titles, prose and code (`Ctrl/Cmd + K`).
 - **Two themes** — Kanagawa (dark) and Gruvbox (light) — plus adjustable text size.
 - **Progress tracking + resume**, saved per course in `localStorage`.
 - **Course-complete celebration** with one-click continue to the next course.
-- **Shareable deep-links** (`?lesson=<id>`, `?view=repl`, `?view=cheatsheet`).
+- **Shareable deep-links** (`?lesson=<id>`, `?view=repl`, `?view=cheatsheet`); the
+  runtime token is never included in a share URL.
+- **Fully offline**: self-hosted fonts and a `default-src 'self'` CSP.
 - A reusable **"course engine"** so the same UI can host additional courses.
 
 ---
 
 ## 🧰 Tech Stack
 
-- **React 19** (Create React App + [CRACO](https://craco.js.org/))
+- **React 19** built with **Vite 7**
 - **CodeMirror 6** + [`@nextjournal/clojure-mode`](https://github.com/nextjournal/clojure-mode)
   for the editor (highlighting, structural editing, autocomplete)
-- **SCI / Scittle** (loaded from CDN in `frontend/public/index.html`) for in-browser evaluation
-- **Scittle Reagent plugin + React 18 (UMD)** for live ClojureScript UI in the Web Dev course
 - **Tailwind CSS** + shadcn/ui components
+- **Clojure 1.12 on JDK 25**, `http-kit`, `cheshire`, packaged with `jpackage`
 - **Yarn** for package management
 
-> The app is **100% client-side** — there is no backend, auth, or database.
-> You only need to run the frontend.
+> The app has no remote backend, auth, or database. The loopback server is part of the
+> desktop process, and evaluation happens in a child JVM on the same machine.
 
 ---
 
 ## ✅ Prerequisites
 
-- **Node.js 18+** (LTS recommended)
-- **Yarn** (Classic v1). Install with `npm install -g yarn` if you don't have it.
-- An internet connection **at runtime** (the SCI/Scittle + React/Reagent runtimes are
-  fetched from a CDN).
+- **Node.js 20+** and **Yarn** (Classic v1) for the UI
+- **JDK 25** and **Leiningen 2.12+** for the desktop app
+- No internet connection is needed at runtime
 
 ---
 
-## 🚀 Getting Started (run locally)
+## 🚀 Getting Started
 
 ```bash
-# 1. Clone your repository
-git clone https://github.com/jawuku/clojure-webdev-course
-cd clojure-webdev-course/frontend
-
-# 2. Install dependencies (use yarn, not npm)
+# 1. Build the UI into the desktop app's resources
+cd frontend
 yarn install
+yarn build:desktop
 
-# 3. Start the dev server
-yarn start
+# 2. Build and launch the desktop app
+cd ../desktop
+lein uberjar
+java -jar target/parens-desktop.jar
 ```
 
-The app opens at **http://localhost:3000**.
+Parens prints its loopback URL (including a one-time token) and opens a browser window.
 
-> Use **Yarn**, not npm — the lockfile and resolutions are Yarn-based.
+For UI-only work, `yarn dev` starts Vite at **http://localhost:3000**. Evaluation is
+unavailable there (no local server/token), so use the desktop app for end-to-end checks.
+After changing the UI, run `yarn build:desktop` again so the JVM app serves the new
+bundle; `desktop/resources/public` is the built artifact and is committed so packaging
+jobs and `lein uberjar` work from a plain checkout.
 
----
-
-## 📦 Production Build
+### Checks
 
 ```bash
 cd frontend
-yarn build
+yarn build                 # production bundle
+yarn check:offline         # fails if the bundle references any external origin
+yarn audit:content         # every snippet, exercise and cheat-sheet example in the worker
+yarn smoke                 # drives the real app in Chromium (needs a jar)
+
+cd ../desktop
+lein test                  # security boundary + worker recovery
+node scripts/phase0_check.mjs --json /tmp/phase0.json
 ```
 
-This produces a static site in **`frontend/build/`**. Because the app is entirely
-client-side, you can host that folder on **any static web host**.
+`yarn smoke` accepts `--jar`, `--json`, and `--chrome PATH` (or `CHROME_PATH`); without a
+path it uses the browser Playwright expects. It checks all 74 lessons across the three
+courses, bundled fonts, theme/search/REPL/exercise behavior, and asserts zero console
+errors, page errors, failed requests, or external requests.
 
-Quick local preview of the build:
-
-```bash
-npx serve -s build
-```
-
----
-
-## 🌐 Deploying
-
-The output is a static single-page app that uses **query-string** routing
-(`?lesson=…`), so it works on plain static hosts **without** any SPA redirect rules.
-`frontend/package.json` sets `"homepage": "."` (a relative base path that works on
-GitHub Pages, Netlify, Vercel, custom domains and the Emergent preview).
-
-### Netlify
-- Base directory: `frontend`
-- Build command: `yarn build`
-- Publish directory: `frontend/build`
-
-### Vercel
-- Root directory: `frontend`
-- Framework preset: **Create React App**
-- Build command: `yarn build` · Output directory: `build`
-
-### GitHub Pages
-A `deploy` script (using `gh-pages`) is included:
-
-```bash
-cd frontend
-yarn install
-yarn deploy        # runs predeploy (yarn build) then publishes build/ to the gh-pages branch
-```
-
-Then set **Settings → Pages → Source** to the **`gh-pages`** branch.
-
-### Any other static host (S3, Cloudflare Pages, nginx, …)
-Just serve the contents of `frontend/build/`.
+`yarn audit:content` runs 222 lesson code blocks, 143 exercise solutions and 153 cheat-sheet
+examples in the worker. `frontend/content-audit-baseline.json` tracks the 44 known
+JavaScript-semantics failures scheduled for Phases 3–5; new failures (or baseline entries
+that start passing) fail the check.
 
 ---
 
 ## 🗂️ Project Structure
 
 ```
-frontend/src/
-├── App.js                     # Shell: layout, routing, view switching, course switching
-├── App.css                    # Themes (Kanagawa / Gruvbox) + all styling
-├── course/
-│   ├── registry.js            # buildCourse(): the reusable "course engine"
-│   ├── clojureCourse.js       # Course 1 (Clojure), assembled from data/lessonsPart1..5
-│   ├── webCourse.js           # Course 2 (Web Dev), Reagent runtimeScripts + data/webPart1..4
-│   └── index.js               # COURSES list + default course id
-├── context/
-│   ├── CourseContext.jsx      # Injects the active course; loads course runtimeScripts
-│   └── AppContext.jsx         # Theme, font size, progress (per-course localStorage)
-├── components/
-│   ├── CodeEditor.jsx         # CodeMirror 6 + clojure-mode + autocomplete + themes
-│   ├── RunnableSnippet.jsx    # Editable/runnable ClojureScript example (text result)
-│   ├── ReagentSnippet.jsx     # Live Reagent component (renders into the page)
-│   ├── StaticSnippet.jsx      # Read-only (non-runnable) preview code
-│   ├── Exercise.jsx           # Exercise runner (Check / Run / Hint / Solution)
-│   ├── Repl.jsx               # REPL playground + shortcuts cheatsheet
-│   ├── CheatSheet.jsx         # Reference cheat sheet (click-to-run)
-│   ├── SearchDialog.jsx       # Ctrl/Cmd+K full-text search
-│   ├── CourseComplete.jsx     # Course-complete celebration overlay
-│   ├── Sidebar.jsx / Topbar.jsx
-│   └── LessonView.jsx         # Renders lesson content blocks (incl. live 'reagent' blocks)
-├── data/
-│   ├── lessonsPart1..5.js     # Clojure course content + exercises
-│   ├── webPart1..4.js         # ClojureScript Web Dev course content + exercises
-│   ├── cheatsheet.js          # Clojure cheat sheet
-│   └── webCheatsheet.js       # Web Dev cheat sheet
-└── lib/
-    ├── sci.js                 # SCI/Scittle evaluation, exercise checking, live Reagent render
-    └── log.js                 # Dev-only logging helper (no-ops in production)
+frontend/
+├── index.html                 # Vite entry (no CDN, no inline scripts)
+├── vite.config.mjs            # @vitejs/plugin-react, alias @ -> src
+├── public/                    # fonts.css, theme-init.js, favicons, woff2 files
+├── scripts/
+│   ├── install-ui.mjs         # copy dist/ -> desktop/resources/public
+│   ├── check-offline.mjs      # fail the build on any external URL
+│   └── smoke.mjs              # browser end-to-end test against the JVM app
+└── src/
+    ├── App.jsx                # Shell: layout, routing, view/course switching
+    ├── App.css                # Themes (Kanagawa / Gruvbox) + all styling
+    ├── course/                # buildCourse() engine + the three course definitions
+    ├── context/               # active course + theme/font/progress state
+    ├── components/            # editor, snippets, REPL, exercises, search, ...
+    ├── data/                  # lesson, exercise and cheat-sheet content
+    └── lib/
+        ├── runtime.js         # HTTP transport to /api/eval and /api/exercise
+        └── log.js             # dev-only logging helper
+
+desktop/
+├── src/parens/main.clj        # launches the server and the worker
+├── src/parens/api.clj         # token/Host/Origin-protected loopback API + static files
+├── src/parens/runtime.clj     # owns the killable worker JVM
+├── src/parens/worker.clj      # evaluates code and exercises
+├── resources/public/          # the built UI (generated by `yarn build:desktop`)
+├── scripts/                   # packaging, signing, phase checkers
+└── test/                      # API security + worker recovery tests
 ```
 
 ---
 
 ## 🧩 How code execution works
 
-- `frontend/public/index.html` loads **Scittle** (which bundles SCI) from jsDelivr.
-- `frontend/src/lib/sci.js` evaluates code via `window.scittle.core.eval_string`,
-  capturing the returned value and printed output, and surfacing errors.
-- **Exercises** run the learner's code in a **fresh namespace**, then evaluate hidden
-  boolean tests, so many different valid solutions are accepted.
-- **Live Reagent** (Web Dev course): `webCourse.js` injects React 18 + the Scittle Reagent
-  plugin as `runtimeScripts`. `renderReagent()` mounts each snippet with React 18's
-  `ReactDOM.createRoot` via `reagent.core/as-element`, reusing one root per preview.
+- The launcher prints `http://127.0.0.1:<port>/#token=<secret>`; the UI reads the token
+  from the fragment, stores it in `sessionStorage`, and rewrites the address bar to a
+  shareable `?lesson=…` URL.
+- Every request to `/api/eval` or `/api/exercise` sends `X-Parens-Token`. The server also
+  validates Host, Origin, and `Sec-Fetch-Site` to block DNS rebinding and cross-site calls.
+- Each course evaluates in its own namespace (`user`, `web`, `regex`), so definitions
+  never leak between courses. `POST /api/set-ns` sets the default, and evals also send the
+  namespace explicitly. Exercises run in a fresh, unique namespace per attempt.
+- A runaway expression is killed after the timeout; the next request starts a fresh
+  worker JVM.
 
 ---
 
@@ -206,9 +185,8 @@ export const myCourse = buildCourse({
   name: "My Course",
   tagline: "Learn Something",
   storageKey: "my_course_v1",
+  ns: "mycourse",
   lessons: myLessons,
-  // Optional extra Scittle plugins (e.g. Reagent) to load into the runtime:
-  // runtimeScripts: ["https://unpkg.com/react@18/umd/react.production.min.js", ...],
 });
 ```
 
@@ -242,6 +220,5 @@ Copyright (c) 2026 Jason Awuku.
 
 ## 🙏 Acknowledgements
 
-Built with [**Emergent AI**](https://emergent.sh) — an agentic full-stack
-development platform that helped scaffold, extend and refine this multi-course
-learning app.
+Originally scaffolded with [**Emergent AI**](https://emergent.sh) and since migrated to a
+local JVM runtime and a Vite build.

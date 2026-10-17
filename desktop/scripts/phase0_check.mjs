@@ -233,8 +233,11 @@ function stopApp(child) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const checker = new Checker();
+  // --command is one executable path, not a command line: installed Windows
+  // launchers live under "C:/Program Files/...", and splitting on whitespace
+  // would break them. Extra app arguments are appended below.
   const command = args.command
-    ? args.command.split(/\s+/)
+    ? [args.command]
     : ["java", "-XX:TieredStopAtLevel=1", "-jar", args.jar];
   const fullCommand = [...command, "--no-open", "--port", "0", "--token", TOKEN];
 
@@ -276,6 +279,26 @@ async function main() {
       "static page has a CSP",
       String(response.headers["content-security-policy"] || "").includes("default-src 'self'")
     );
+
+    response = await call(port, "POST", "/api/set-ns", { ns: "audit-check" });
+    checker.check(
+      "set-ns selects the default namespace",
+      response.status === 200 && response.data.ns === "audit-check",
+      response.status
+    );
+    const namespaced = await call(port, "POST", "/api/eval", { code: "(ns-name *ns*)" });
+    checker.check(
+      "eval without ns uses the active namespace",
+      namespaced.status === 200 && namespaced.data.value === "audit-check",
+      namespaced.data.value
+    );
+    const afterSetNs = await runtime(port);
+    checker.check(
+      "runtime info reports the active namespace",
+      afterSetNs["active-ns"] === "audit-check",
+      afterSetNs["active-ns"]
+    );
+    await call(port, "POST", "/api/set-ns", { ns: "user" });
 
     const firstEval = await evalCode(port, "(+ 1 2)");
     checker.note("time_to_first_eval_ms", Number((performance.now() - startedAt).toFixed(1)));

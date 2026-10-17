@@ -163,7 +163,7 @@ export function Sidebar({ current, view, onSelectLesson, onOpenRepl, onOpenSearc
       </nav>
 
       <div className="sidebar-foot">
-        <BookOpen size={13} /> Runs 100% in your browser via SCI
+        <BookOpen size={13} /> Runs locally on the JVM — no network needed
       </div>
     </aside>
   );

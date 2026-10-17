@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Play, CheckCircle2, XCircle, Eye, RotateCcw, Lightbulb } from "lucide-react";
 import { CodeEditor } from "./CodeEditor";
-import { evalClojure, runExerciseTests } from "../lib/sci";
+import { evalClojure, runExerciseTests } from "../lib/runtime";
 import { recordGolfScore, patternSourceLength } from "../lib/golf";
 import { useApp } from "../context/AppContext";
 
@@ -10,23 +10,29 @@ export function Exercise({ lessonId, index, exercise }) {
   const [source, setSource] = useState(exercise.starter || "");
   const [output, setOutput] = useState(null);
   const [check, setCheck] = useState(null);
+  const [checking, setChecking] = useState(false);
   const [showHint, setShowHint] = useState(false);
 
   const alreadyDone = !!progress?.[lessonId]?.exercises?.[index];
 
-  const run = () => {
-    const r = evalClojure(source);
-    setOutput(r);
+  const run = async () => {
+    setOutput(await evalClojure(source));
     setCheck(null);
   };
 
-  const submit = () => {
-    const res = runExerciseTests(source, exercise.tests);
-    setCheck(res);
-    setOutput(null);
-    if (res.passed) {
-      markExercise(lessonId, index);
-      if (exercise.golf) recordGolfScore(exercise.golf.id, patternSourceLength(source));
+  const submit = async () => {
+    if (checking) return;
+    setChecking(true);
+    try {
+      const res = await runExerciseTests(source, exercise.tests);
+      setCheck(res);
+      setOutput(null);
+      if (res.passed) {
+        markExercise(lessonId, index);
+        if (exercise.golf) recordGolfScore(exercise.golf.id, patternSourceLength(source));
+      }
+    } finally {
+      setChecking(false);
     }
   };
 
@@ -66,8 +72,13 @@ export function Exercise({ lessonId, index, exercise }) {
       </div>
 
       <div className="exercise-actions">
-        <button className="run-btn" onClick={submit} data-testid={`exercise-check-${index}`}>
-          <CheckCircle2 size={14} /> Check answer
+        <button
+          className="run-btn"
+          onClick={submit}
+          disabled={checking}
+          data-testid={`exercise-check-${index}`}
+        >
+          <CheckCircle2 size={14} /> {checking ? "Checking…" : "Check answer"}
         </button>
         <button className="ghost-btn" onClick={run} data-testid={`exercise-run-${index}`}>
           <Play size={13} /> Run

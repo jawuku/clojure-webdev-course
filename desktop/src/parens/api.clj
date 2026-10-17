@@ -20,7 +20,10 @@
 (def ^:private content-security-policy
   (str "default-src 'self'; "
        "script-src 'self'; "
-       "style-src 'self'; "
+       ;; CodeMirror 6 injects its theme and highlight styles into a <style>
+       ;; element at runtime; without 'unsafe-inline' the editor renders
+       ;; unstyled and the browser logs a CSP violation. Scripts stay strict.
+       "style-src 'self' 'unsafe-inline'; "
        "img-src 'self' data:; "
        "font-src 'self'; "
        "connect-src 'self'; "
@@ -36,7 +39,10 @@
    "png" "image/png"
    "ico" "image/x-icon"
    "woff2" "font/woff2"
-   "json" "application/json; charset=utf-8"})
+   "woff" "font/woff"
+   "ttf" "font/ttf"
+   "json" "application/json; charset=utf-8"
+   "txt" "text/plain; charset=utf-8"})
 
 (defn new-token []
   (let [bytes (byte-array 32)]
@@ -72,6 +78,10 @@
              "x-content-type-options" "nosniff"}
    :body body})
 
+(defn- resource-bytes [resource]
+  (with-open [in (io/input-stream resource)]
+    (.readAllBytes ^java.io.InputStream in)))
+
 (defn- static-response [uri]
   (let [path (cond
                (= uri "/") "index.html"
@@ -88,7 +98,9 @@
                    "cache-control" "no-store"
                    "x-content-type-options" "nosniff"
                    "content-security-policy" content-security-policy}
-         :body (slurp resource)}))))
+         ;; Read bytes, not text: the bundle ships woff2 fonts and PNG/ICO
+         ;; icons, and slurp would corrupt them.
+         :body (resource-bytes resource)}))))
 
 (defn- read-body [request]
   (let [declared (get-in request [:headers "content-length"])
@@ -117,10 +129,21 @@
 
 (defn- runtime-info []
   (merge {:server-pid (.pid (ProcessHandle/current))
+          :active-ns (runtime/active-ns)
           :timeout-ms (runtime/timeout-ms)
           :clojure (clojure-version)
           :java (System/getProperty "java.version")}
          (runtime/info)))
+
+(defn- set-ns-handler [request]
+  (let [{:keys [data error]} (read-body request)]
+    (if error
+      (body-error error)
+      (let [{:keys [ns]} data]
+        (if (valid-ns? ns)
+          (do (runtime/set-active-ns! ns)
+              (json-response 200 {:ok true :ns ns}))
+          (json-response 400 {:ok false :error "Invalid namespace."}))))))
 
 (defn- eval-handler [request]
   (let [{:keys [data error]} (read-body request)]
@@ -138,7 +161,7 @@
           (json-response 400 {:ok false :error "Invalid namespace."})
 
           :else
-          (json-response 200 (runtime/eval-code (or ns "user") code)))))))
+          (json-response 200 (runtime/eval-code (or ns (runtime/active-ns)) code)))))))
 
 (defn- exercise-handler [request]
   (let [{:keys [data error]} (read-body request)]
@@ -167,6 +190,9 @@
 
       (and (= request-method :get) (= uri "/api/runtime"))
       (json-response 200 (runtime-info))
+
+      (and (= request-method :post) (= uri "/api/set-ns"))
+      (set-ns-handler request)
 
       (and (= request-method :post) (= uri "/api/eval"))
       (eval-handler request)
