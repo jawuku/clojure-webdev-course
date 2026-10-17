@@ -3,9 +3,9 @@
 #
 # Unlike the .deb and .rpm, which repack a validated app image, there is no
 # supported way to turn an existing app image into an .msi: jpackage builds the
-# runtime itself. The Windows runtime keeps runtime/bin/java.exe (jpackage
-# strips native commands on Linux only), which is what the child evaluator
-# needs; the installed-package check in CI proves it end to end.
+# runtime itself. That runtime may omit runtime/bin/java.exe, so the app falls
+# back to the ParensWorker launcher (see runtime.clj); the installed-package
+# check in CI proves the worker starts from the installed copy.
 #
 # jpackage's MSI support needs the WiX Toolset (candle.exe/light.exe) on PATH.
 # GitHub's windows runners ship WiX 3.x; desktop-ci.yml puts it on PATH and

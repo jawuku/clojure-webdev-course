@@ -21,6 +21,21 @@
 (defn- evaluate [code]
   (runtime/eval-code "user" code))
 
+(deftest worker-launcher-candidates-cover-every-packaged-layout
+  (let [paths (fn [home]
+                (->> (#'runtime/launcher-candidates (java.io.File. home))
+                     (map #(.getPath ^java.io.File %))
+                     set))]
+    (testing "Linux app image: <app>/bin/ParensWorker"
+      (is (contains? (paths "/opt/parens/lib/runtime")
+                     "/opt/parens/bin/ParensWorker")))
+    (testing "Windows installer: <app>/ParensWorker.exe next to the launcher"
+      (is (contains? (paths "C:/Program Files/ParensPhase0/runtime")
+                     "C:/Program Files/ParensPhase0/ParensWorker")))
+    (testing "macOS bundle: Contents/MacOS/ParensWorker"
+      (is (contains? (paths "/Applications/Parens.app/Contents/runtime/Contents/Home")
+                     "/Applications/Parens.app/Contents/MacOS/ParensWorker")))))
+
 (deftest worker-evaluates-real-clojure
   (with-worker
     (fn []

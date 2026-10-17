@@ -479,12 +479,15 @@ jobs:
               Select-Object -First 5 | ForEach-Object { Write-Host $_.FullName }
             throw 'installed ParensPhase0.exe not found'
           }
-          # The child evaluator is launched from the bundled runtime. If the
-          # bundler ever strips it, fail here with a clear message instead of
-          # inside the checker.
-          $javaExe = Join-Path (Split-Path $exe) 'runtime\bin\java.exe'
-          if (-not (Test-Path $javaExe)) {
-            throw "installed runtime has no java.exe at $javaExe"
+          # The child evaluator runs from the bundled java.exe when jpackage
+          # kept it, or from the ParensWorker launcher next to the app when the
+          # runtime was stripped. Fail here with a clear message if neither is
+          # present; the checker then proves the worker really starts.
+          $appDir = Split-Path $exe
+          $javaExe = Join-Path $appDir 'runtime\bin\java.exe'
+          $workerExe = Join-Path $appDir 'ParensWorker.exe'
+          if (-not (Test-Path $javaExe) -and -not (Test-Path $workerExe)) {
+            throw "installed app has neither runtime\bin\java.exe nor ParensWorker.exe"
           }
           # Forward slashes keep Git Bash from rewriting the path.
           "exe=$($exe.Replace('\', '/'))" >> $env:GITHUB_OUTPUT
@@ -561,9 +564,11 @@ jobs:
             Start-Sleep -Seconds 3
           } while ((Get-Date) -lt $deadline)
           if (-not $exe) { throw 'installed ParensPhase0.exe not found' }
-          $javaExe = Join-Path (Split-Path $exe) 'runtime\bin\java.exe'
-          if (-not (Test-Path $javaExe)) {
-            throw "installed runtime has no java.exe at $javaExe"
+          $appDir = Split-Path $exe
+          $javaExe = Join-Path $appDir 'runtime\bin\java.exe'
+          $workerExe = Join-Path $appDir 'ParensWorker.exe'
+          if (-not (Test-Path $javaExe) -and -not (Test-Path $workerExe)) {
+            throw "installed app has neither runtime\bin\java.exe nor ParensWorker.exe"
           }
           "exe=$($exe.Replace('\', '/'))" >> $env:GITHUB_OUTPUT
           Write-Host "Installed launcher: $exe"

@@ -64,20 +64,40 @@
                        (if (.isAbsolute f) (.getPath f) (.getAbsolutePath f))))
                    entries))))
 
+(defn- launcher-candidates
+  "Every place jpackage may have put the ParensWorker launcher, walking up from
+  java.home. The layout differs per platform:
+    Linux    <app>/bin/ParensWorker
+    Windows  <app>/ParensWorker.exe
+    macOS    <app>.app/Contents/MacOS/ParensWorker"
+  [^File java-home]
+  (let [name (runtime-bin "ParensWorker")]
+    (->> (iterate #(.getParentFile ^File %) java-home)
+         (take-while some?)
+         (take 6)
+         (mapcat (fn [^File dir]
+                   [(io/file dir "bin" name)
+                    (io/file dir name)
+                    (io/file dir "MacOS" name)
+                    (io/file dir "Contents" "MacOS" name)]))
+         distinct)))
+
 (defn- worker-launcher
-  "In a jpackage app-image the runtime is built with --strip-native-commands,
-  so there is no bin/java. The build adds a second launcher for the worker;
-  use it in that case."
+  "In a jpackage app-image (and in the Windows installers, whose runtime
+  jpackage regenerates) the runtime may be built with --strip-native-commands,
+  so there is no bin/java. The build adds a second launcher for the worker; use
+  it in that case."
   []
   (let [java (java-bin)]
     (or
      (when (.canExecute java)
        {:command [(str java) "-Xmx512m" "-XX:TieredStopAtLevel=1"
                   "-cp" (classpath) "parens.worker"]})
-     (let [app-root (.getParentFile (.getParentFile (io/file (System/getProperty "java.home"))))
-           launcher (io/file app-root "bin" (runtime-bin "ParensWorker"))]
-       (when (.canExecute launcher)
-         {:command [(str launcher)]})))))
+     (when-let [launcher (->> (launcher-candidates
+                               (io/file (System/getProperty "java.home")))
+                              (filter (fn [^File f] (.canExecute f)))
+                              first)]
+       {:command [(str launcher)]}))))
 
 (defn- worker-command []
   (or (:command (worker-launcher))
