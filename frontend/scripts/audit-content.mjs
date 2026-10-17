@@ -13,9 +13,16 @@
  * snippets waiting for Phases 3–5). New failures fail CI; entries that start
  * passing also fail until removed, so the baseline only shrinks.
  *
+ * Every passing snippet and cheat-sheet example is also compared with the value
+ * and printed output recorded in content-audit-values.json, so a change that
+ * makes the code run but print something different still fails. Blocks that are
+ * genuinely nondeterministic (a random example) set `nondeterministic: true` in
+ * the course data and are reported instead of asserted.
+ *
  * Usage:
  *   node scripts/audit-content.mjs
  *   node scripts/audit-content.mjs --update-baseline
+ *   node scripts/audit-content.mjs --update-values
  *   node scripts/audit-content.mjs --url http://127.0.0.1:PORT/#token=...
  *   node scripts/audit-content.mjs --jar ../desktop/target/parens-desktop.jar
  *                                --json ../desktop/benchmarks/content-audit.json
@@ -30,6 +37,7 @@ import { createServer } from "vite";
 
 const frontendDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const defaultBaseline = path.join(frontendDir, "content-audit-baseline.json");
+const defaultValues = path.join(frontendDir, "content-audit-values.json");
 
 function parseArgs(argv) {
   const args = {
@@ -37,7 +45,9 @@ function parseArgs(argv) {
     url: null,
     json: path.resolve(frontendDir, "..", "desktop", "benchmarks", "content-audit.json"),
     baseline: defaultBaseline,
+    values: defaultValues,
     updateBaseline: false,
+    updateValues: false,
     timeoutMs: 2000,
     maxP95: 150,
   };
@@ -56,8 +66,13 @@ function parseArgs(argv) {
     } else if (key === "--baseline") {
       args.baseline = path.resolve(value);
       i += 1;
+    } else if (key === "--values") {
+      args.values = path.resolve(value);
+      i += 1;
     } else if (key === "--update-baseline") {
       args.updateBaseline = true;
+    } else if (key === "--update-values") {
+      args.updateValues = true;
     } else if (key === "--timeout-ms") {
       args.timeoutMs = Number(value);
       i += 1;
@@ -67,7 +82,8 @@ function parseArgs(argv) {
     } else if (key === "--help" || key === "-h") {
       console.log(
         "audit-content.mjs [--jar PATH] [--url URL] [--json PATH] [--baseline PATH]\n" +
-          "                  [--update-baseline] [--timeout-ms N] [--max-p95 MS]"
+          "                  [--values PATH] [--update-baseline] [--update-values]\n" +
+          "                  [--timeout-ms N] [--max-p95 MS]"
       );
       process.exit(0);
     } else {
@@ -187,6 +203,66 @@ function loadBaseline(file) {
   return new Set(keys);
 }
 
+const valuesNote =
+  "Expected value (pr-str of the last form) and printed output for every passing " +
+  "snippet and cheat-sheet example, keyed course|kind|name. Run " +
+  "`yarn audit:content --update-values` to refresh it, and review the diff: a " +
+  "changed value means the lesson now shows learners something different. " +
+  "Volatile object identity hashes and generated function class names are normalized.";
+
+function loadValues(file) {
+  if (!fs.existsSync(file)) return new Map();
+  const raw = JSON.parse(fs.readFileSync(file, "utf8"));
+  const values = raw.values;
+  if (!values || typeof values !== "object" || Array.isArray(values)) {
+    throw new Error(`${file} must contain a values object`);
+  }
+  return new Map(Object.entries(values));
+}
+
+function writeValues(file, values) {
+  const lines = [...values.keys()]
+    .sort()
+    .map((key) => `    ${JSON.stringify(key)}: ${JSON.stringify(values.get(key))}`);
+  const body = lines.length > 0 ? `${lines.join(",\n")}\n` : "";
+  fs.writeFileSync(
+    file,
+    `{\n  "note": ${JSON.stringify(valuesNote)},\n  "values": {\n${body}  }\n}\n`
+  );
+}
+
+// `#object[web$eval1812$fn__1813 0x5f3c… "web$eval1812$fn__1813@4a2b…"]`
+// carries an identity hash on every run, and the eval/gensym counters shift
+// whenever course content earlier in the run changes. Normalize both before an
+// observed value is compared or recorded; the shape of the value still counts.
+function normalizeVolatile(text) {
+  return String(text ?? "")
+    .replace(/0x[0-9a-fA-F]+/g, "0x…")
+    .replace(/@[0-9a-fA-F]{6,}/g, "@…")
+    .replace(/eval\d+/g, "eval…")
+    .replace(/__\d+/g, "__…");
+}
+
+function observedValue(result) {
+  const value = normalizeVolatile(result.value ?? "nil");
+  const output = normalizeVolatile(result.output ?? "");
+  return output ? { value, output } : { value };
+}
+
+function sameValue(expected, actual) {
+  return expected.value === actual.value && (expected.output ?? "") === (actual.output ?? "");
+}
+
+function describeValueDifference(expected, actual) {
+  if (expected.value !== actual.value) {
+    return `value changed: expected ${truncate(expected.value)}, got ${truncate(actual.value)}`;
+  }
+  return (
+    `printed output changed: expected ${truncate(expected.output, 120)}, ` +
+    `got ${truncate(actual.output, 120)}`
+  );
+}
+
 async function loadCourses() {
   const vite = await createServer({
     root: frontendDir,
@@ -235,6 +311,53 @@ async function main() {
       cheatItems: 0,
       skippedReadables: 0,
     };
+    const expectations = loadValues(args.values);
+    const unasserted = new Map();
+    const recorded = new Map();
+    const seenKeys = new Set();
+    let nondeterministic = 0;
+
+    // Compare one passing item with content-audit-values.json. A missing entry
+    // is reported separately: it is new content nobody has reviewed yet, not
+    // known debt, so it must not be absorbed into the failure baseline.
+    function assertValue({ key, kind, course, lesson, title, group, name, index, code, result, block }) {
+      if (block.nondeterministic) {
+        nondeterministic += 1;
+        return;
+      }
+      seenKeys.add(key);
+      const actual = observedValue(result);
+      const expected = expectations.get(key);
+      if (!expected) {
+        unasserted.set(key, {
+          key,
+          course: course.id,
+          kind,
+          lesson,
+          title,
+          group,
+          name,
+          index,
+          code: truncate(code, 500),
+          value: actual.value,
+          ...(actual.output ? { output: actual.output } : {}),
+        });
+      } else if (!sameValue(expected, actual)) {
+        failures.set(key, {
+          key,
+          course: course.id,
+          kind,
+          lesson,
+          title,
+          group,
+          name,
+          index,
+          code: truncate(code, 500),
+          error: describeValueDifference(expected, actual),
+        });
+      }
+      recorded.set(key, actual);
+    }
 
     for (const course of courses) {
       await client.api("/api/set-ns", { ns: course.ns });
@@ -261,6 +384,18 @@ async function main() {
                 index,
                 code: truncate(block.code, 500),
                 error: truncate(result.error),
+              });
+            } else {
+              assertValue({
+                key,
+                kind: "snippet",
+                course,
+                lesson: lesson.id,
+                title: lesson.title,
+                index,
+                code: block.code,
+                result,
+                block,
               });
             }
           } catch (error) {
@@ -329,6 +464,17 @@ async function main() {
                 code: truncate(item.example, 500),
                 error: truncate(result.error),
               });
+            } else {
+              assertValue({
+                key,
+                kind: "cheatsheet",
+                course,
+                group: group.group,
+                name: item.name,
+                code: item.example,
+                result,
+                block: {},
+              });
             }
           } catch (error) {
             failures.set(key, {
@@ -356,6 +502,9 @@ async function main() {
     const current = new Set(failures.keys());
     const newFailures = [...current].filter((key) => !baseline.has(key));
     const fixed = [...baseline].filter((key) => !current.has(key));
+    const staleValues = [...expectations.keys()].filter((key) => !seenKeys.has(key));
+    const assertedValues = seenKeys.size - unasserted.size;
+    const refreshing = args.updateBaseline || args.updateValues;
 
     console.log(
       `\n${counts.snippets} code blocks · ${counts.exercises} exercise solutions · ` +
@@ -366,6 +515,10 @@ async function main() {
         `(budget ${args.maxP95} ms over ${client.latencies.length} calls)`
     );
     console.log(`failures: ${failures.size} (${newFailures.length} new, ${fixed.length} fixed)`);
+    console.log(
+      `expected values: ${assertedValues} asserted · ${unasserted.size} unrecorded · ` +
+        `${staleValues.length} stale · ${nondeterministic} nondeterministic`
+    );
 
     if (args.updateBaseline) {
       fs.writeFileSync(
@@ -382,7 +535,12 @@ async function main() {
       console.log(`Wrote ${args.baseline} (${current.size} entries)`);
     }
 
-    if (!args.updateBaseline && newFailures.length > 0) {
+    if (args.updateValues) {
+      writeValues(args.values, recorded);
+      console.log(`Wrote ${args.values} (${recorded.size} expected values)`);
+    }
+
+    if (!refreshing && newFailures.length > 0) {
       console.log("\nNew failures (not in the baseline):");
       for (const key of newFailures.slice(0, 25)) {
         const failure = failures.get(key);
@@ -394,6 +552,18 @@ async function main() {
       console.log("\nNow passing — remove these from the baseline:");
       for (const key of fixed.slice(0, 25)) console.log(`  ${key}`);
     }
+    if (!refreshing && unasserted.size > 0) {
+      console.log("\nNo expected value recorded (run `yarn audit:content --update-values`):");
+      for (const entry of [...unasserted.values()].slice(0, 25)) {
+        console.log(`  ${entry.key} => ${truncate(entry.value, 120)}`);
+      }
+      if (unasserted.size > 25) console.log(`  … and ${unasserted.size - 25} more`);
+    }
+    if (!refreshing && staleValues.length > 0) {
+      console.log("\nExpected values for content that no longer runs; refresh them:");
+      for (const key of staleValues.slice(0, 25)) console.log(`  ${key}`);
+      if (staleValues.length > 25) console.log(`  … and ${staleValues.length - 25} more`);
+    }
 
     const report = {
       origin,
@@ -402,6 +572,12 @@ async function main() {
       failures: [...failures.values()].sort((a, b) => a.key.localeCompare(b.key)),
       new_failures: newFailures.sort(),
       fixed,
+      values: {
+        asserted: assertedValues,
+        nondeterministic,
+        unrecorded: [...unasserted.values()].sort((a, b) => a.key.localeCompare(b.key)),
+        stale: staleValues.sort(),
+      },
       latency: {
         calls: client.latencies.length,
         p50_ms: Number(p50.toFixed(2)),
@@ -413,9 +589,27 @@ async function main() {
     fs.writeFileSync(args.json, `${JSON.stringify(report, null, 2)}\n`);
     console.log(`Wrote ${args.json}`);
 
-    if (args.updateBaseline) return 0;
+    if (refreshing) {
+      if (!args.updateValues && unasserted.size > 0) {
+        console.log(
+          `\n${unasserted.size} item(s) still have no expected value; also run --update-values.`
+        );
+      }
+      if (!args.updateValues && staleValues.length > 0) {
+        console.log(`\n${staleValues.length} stale expected value(s); also run --update-values.`);
+      }
+      return 0;
+    }
     let ok = true;
     if (newFailures.length > 0) ok = false;
+    if (unasserted.size > 0) {
+      console.log("\nSome passing items have no expected value recorded.");
+      ok = false;
+    }
+    if (staleValues.length > 0) {
+      console.log("\nSome expected values match no current content; refresh the values file.");
+      ok = false;
+    }
     if (fixed.length > 0) {
       console.log("\nThe baseline contains entries that now pass; refresh it.");
       ok = false;

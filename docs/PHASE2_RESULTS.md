@@ -52,12 +52,20 @@ active namespace outside the worker, so restarts do not lose it.
 - **Ratchet:** a failure not in the baseline fails CI, and a baseline entry that starts
   passing also fails until removed. The list can only shrink. Refresh after reviewing a
   report with `yarn audit:content --update-baseline`.
+- **Expected values:** `frontend/content-audit-values.json` pins the value (`pr-str` of the
+  last form) and printed output of every passing snippet and cheat-sheet example. The audit
+  fails on a changed value or output, on a passing item with no recorded entry (new content
+  must be reviewed before it can ship), and on an entry whose item no longer runs. Object
+  identity hashes and generated `eval…`/`fn__…` class names are normalized, so only the
+  shape of such a value is compared; the single genuinely random example
+  (`rand-int`) is marked `nondeterministic: true` in the course data and is reported in the
+  summary rather than asserted.
 
 The old Puppeteer/Scittle audits (`audit-cheatsheet`, `audit-snippets`, `audit-exercises`,
 `audit-reagent`) and their helper were removed: they cannot run without SCI and the new
-audit supersedes them. Exercise values are still asserted by the hidden tests. Snippet and
-cheat-sheet **output values** are not asserted yet; that belongs with the Phase 3 content
-work.
+audit supersedes them. Exercise values are asserted by the hidden tests; snippet and
+cheat-sheet output values are now asserted against the recorded expectations (341 of the
+342 passing items; the remaining one is the `rand-int` demo).
 
 ## Verification
 
@@ -66,8 +74,11 @@ work.
   token/Host/Origin rejection.
 - `phase0_check.mjs`: **31/31** against the jar, including set-ns → eval-without-ns →
   `active-ns` in runtime info, plus the original security, timeout and packaging checks.
-- `yarn audit:content`: **0 new, 0 fixed** against the baseline; 474/518 calls pass;
-  p50 4.9 ms / p95 16.5 ms / max 982 ms.
+- `yarn audit:content`: **0 new, 0 fixed** against the baseline; 474/518 calls pass,
+  **341 expected values asserted, 0 unrecorded, 0 stale, 1 nondeterministic**;
+  p50 4.9 ms / p95 16.5 ms / max 982 ms. Two consecutive runs produced byte-identical
+  values files, so the snapshot is stable; tampering with one value, one printed output,
+  deleting one entry and adding a stale one each failed the audit as intended.
 - `yarn smoke`: **19/19** browser checks still pass with `set-ns` wired in.
 - `yarn build:desktop` + `yarn check:offline`: clean; the committed bundle was refreshed.
 
@@ -79,6 +90,7 @@ cd ../frontend
 yarn audit:content                    # ratchet check against the baseline
 yarn audit:content --json /tmp/audit.json
 yarn audit:content --update-baseline  # only after reviewing the report
+yarn audit:content --update-values    # only after reviewing the value diff
 ```
 
 ## Limitations / next
@@ -86,7 +98,8 @@ yarn audit:content --update-baseline  # only after reviewing the report
 - The 44 baseline entries are real content debt. Phase 3 fixes the Clojure course, Phase 4
   the Web Dev course, Phase 5 Regex; each fix should remove its baseline entry in the same
   change (the audit fails otherwise).
-- The audit proves code runs, not that every printed value matches the lesson prose. The
-  Phase 3 audit work should add expected-value assertions, starting with the cheat sheet.
+- Expected values are recorded from the runtime, so they prove the content has not drifted,
+  not that it matches the prose above it. Reviewing the values diff is where a wrong-looking
+  value gets caught; Phase 3–5 content edits must refresh the file in the same change.
 - Eval p95 is far inside budget, but the slowest call was 982 ms (worker start), which the
   UI hides behind the “Starting the local Clojure runtime…” state.

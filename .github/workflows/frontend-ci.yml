@@ -86,8 +86,9 @@ jobs:
 
       # Runs every lesson code block, exercise solution and cheat-sheet example
       # in the worker. Fails on any failure not listed in
-      # frontend/content-audit-baseline.json, and on baseline entries that now
-      # pass (the list only shrinks as content is migrated).
+      # frontend/content-audit-baseline.json, on baseline entries that now pass
+      # (the list only shrinks as content is migrated), and on any value/output
+      # that differs from frontend/content-audit-values.json.
       - name: Audit all course content
         working-directory: frontend
         run: yarn audit:content --json "$RUNNER_TEMP/content-audit.json"

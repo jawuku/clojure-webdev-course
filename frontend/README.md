@@ -52,8 +52,15 @@ a 150 ms p95 budget.
 yarn audit:content                    # ratchet check
 yarn audit:content --json /tmp/report.json
 yarn audit:content --update-baseline  # after reviewing the report
+yarn audit:content --update-values    # after reviewing changed values
 ```
 
 `content-audit-baseline.json` records known content debt (JavaScript/ClojureScript
 semantics waiting for Phases 3–5). A new failure fails, and an entry that starts passing
 also fails until it is removed, so the baseline only shrinks.
+
+`content-audit-values.json` records the expected value (`pr-str` of the last form) and printed
+output of every passing snippet and cheat-sheet example, keyed by course and item. A changed
+value, a passing item with no recorded entry, or an entry whose content disappeared all fail
+the check. The one genuinely nondeterministic example (a `rand-int` demo) sets
+`nondeterministic: true` on its block and is counted in the summary instead of asserted.

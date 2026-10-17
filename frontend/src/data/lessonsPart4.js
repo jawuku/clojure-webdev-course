@@ -54,7 +54,7 @@ export const lessonsPart4 = [
       { t: "p", text: "repeatedly builds a lazy sequence by calling a function over and over — handy when each element comes from doing something rather than transforming a previous value. Give it a function of no arguments." },
       { t: "code", code: "(take 4 (repeatedly (fn [] :ping)))" },
       { t: "p", text: "You can also ask for a fixed number directly. This is often used with something that changes each call, like a random number:" },
-      { t: "code", code: "(repeatedly 5 (fn [] (rand-int 100)))" },
+      { t: "code", code: "(repeatedly 5 (fn [] (rand-int 100)))", nondeterministic: true },
       { t: "p", text: "Notice the difference from iterate: iterate feeds each result into the next call, while repeatedly ignores the previous value and just calls the function again — perfect for independent, generated values." },
       { t: "h", text: "Building your own" },
       { t: "p", text: "lazy-seq lets you define your own lazy sequences. This one counts upward forever, but only as far as you look." },

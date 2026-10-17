@@ -116,7 +116,10 @@ errors, page errors, failed requests, or external requests.
 `yarn audit:content` runs 222 lesson code blocks, 143 exercise solutions and 153 cheat-sheet
 examples in the worker. `frontend/content-audit-baseline.json` tracks the 44 known
 JavaScript-semantics failures scheduled for Phases 3–5; new failures (or baseline entries
-that start passing) fail the check.
+that start passing) fail the check. `frontend/content-audit-values.json` pins the value and
+printed output of every passing snippet and cheat-sheet example, so content that runs but
+prints something different also fails; refresh it with `--update-values` after reviewing the
+diff.
 
 ---
 

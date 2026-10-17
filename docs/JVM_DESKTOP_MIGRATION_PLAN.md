@@ -220,7 +220,8 @@ where needed), themes/search/REPL shell work, zero console errors, zero external
 
 > Completed: `/api/set-ns`, active namespace in runtime info, sequential top-level
 > evaluation (fixes defprotocol/defrecord/reify), cause-chain errors, and a JVM content
-> audit over 518 snippets/exercises/cheat-sheet examples with a shrinking baseline. The
+> audit over 518 snippets/exercises/cheat-sheet examples with a shrinking baseline, plus
+> expected value/output assertions for every passing snippet and cheat-sheet example. The
 > audit found 44 known JavaScript-semantics failures for Phases 3–5; eval p95 is 16.5 ms.
 > See `PHASE2_RESULTS.md`.
 
@@ -228,12 +229,13 @@ where needed), themes/search/REPL shell work, zero console errors, zero external
   reset-runtime.
 - `runtime.js` transport + update `RunnableSnippet`, `Exercise`, `Repl`, `CheatSheet`, `App`.
 - Build the Clojure content audit: export lessons to JSON, run every `code` block, every
-  exercise solution, and every exercise test in the worker, per course namespace. Replace
-  the Puppeteer/Scittle audit scripts with this as the primary regression harness.
+  exercise solution, and every exercise test in the worker, per course namespace, and
+  assert each snippet/cheat-sheet value and printed output. Replace the Puppeteer/Scittle
+  audit scripts with this as the primary regression harness.
 - Add a browser-mode Playwright smoke test against the real server.
 
-**Acceptance:** every exercise solution passes; every snippet runs; timeout recovery and
-token rejection are covered by tests; eval p95 < 150 ms.
+**Acceptance:** every exercise solution passes; every snippet runs and matches its recorded
+value/output; timeout recovery and token rejection are covered by tests; eval p95 < 150 ms.
 
 ### Phase 3 — Clojure course → JVM semantics (~5 days)
 
