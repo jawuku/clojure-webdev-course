@@ -1,0 +1,5 @@
+/target/
+/benchmarks/*.json
+*.log
+/.lein-failures
+/.lein-repl-history

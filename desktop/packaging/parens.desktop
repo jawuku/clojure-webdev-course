@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Parens
+GenericName=Clojure Learning App
+Comment=Learn Clojure with a local JVM
+Exec=/usr/bin/parens
+Icon=parens
+Terminal=false
+Categories=Education;Development;
+Keywords=clojure;lisp;programming;learning;
+StartupNotify=true
