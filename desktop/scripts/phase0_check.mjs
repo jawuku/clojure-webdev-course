@@ -12,7 +12,7 @@
  *                                 [--json target/phase0/results.json]
  */
 
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
@@ -20,6 +20,7 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 
 const HOST = "127.0.0.1";
+const IS_WINDOWS = process.platform === "win32";
 let TOKEN = crypto.randomBytes(32).toString("base64url");
 
 function parseArgs(argv) {
@@ -212,6 +213,17 @@ async function waitForExit(child, timeoutMs = 5000) {
       resolve(code);
     });
   });
+}
+
+// Windows has no SIGTERM: Node's kill() calls TerminateProcess, which skips
+// the JVM shutdown hook and would leave the worker running. taskkill /T kills
+// the whole tree instead, so the orphan check means the same thing everywhere.
+function stopApp(child) {
+  if (IS_WINDOWS) {
+    spawnSync("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+  } else {
+    child.kill("SIGTERM");
+  }
 }
 
 async function main() {
@@ -443,9 +455,13 @@ async function main() {
     workerPid = (await runtime(port)).pid;
     checker.note("worker_pid_before_shutdown", workerPid);
 
-    child.kill("SIGTERM");
+    stopApp(child);
     const exitCode = await waitForExit(child);
-    checker.check("app exits on SIGTERM", exitCode !== null, exitCode);
+    checker.check(
+      IS_WINDOWS ? "app exits on taskkill" : "app exits on SIGTERM",
+      exitCode !== null,
+      exitCode
+    );
     await sleep(2000);
     checker.check("no orphan eval worker", !pidAlive(workerPid), workerPid);
 
@@ -472,8 +488,11 @@ async function main() {
     return checker.failures === 0 ? 0 : 1;
   } finally {
     if (child.exitCode === null) {
-      child.kill("SIGKILL");
-      await waitForExit(child);
+      stopApp(child);
+      if ((await waitForExit(child)) === null && !IS_WINDOWS) {
+        child.kill("SIGKILL");
+        await waitForExit(child);
+      }
     }
   }
 }

@@ -31,8 +31,16 @@
 (defn worker-pid [] (:pid @state))
 (defn set-timeout-ms! [ms] (reset! timeout-ms* (max 250 (long ms))))
 
+(defn- windows? []
+  (str/starts-with? (System/getProperty "os.name") "Windows"))
+
+(defn- runtime-bin
+  "Name of a launcher inside the JVM's bin directory (java.exe on Windows)."
+  [name]
+  (if (windows?) (str name ".exe") name))
+
 (defn- java-bin []
-  (io/file (System/getProperty "java.home") "bin" "java"))
+  (io/file (System/getProperty "java.home") "bin" (runtime-bin "java")))
 
 (defn- classpath
   "The current classpath with every entry made absolute, so the worker can run
@@ -60,7 +68,7 @@
        {:command [(str java) "-Xmx512m" "-XX:TieredStopAtLevel=1"
                   "-cp" (classpath) "parens.worker"]})
      (let [app-root (.getParentFile (.getParentFile (io/file (System/getProperty "java.home"))))
-           launcher (io/file app-root "bin" "ParensWorker")]
+           launcher (io/file app-root "bin" (runtime-bin "ParensWorker"))]
        (when (.canExecute launcher)
          {:command [(str launcher)]})))))
 

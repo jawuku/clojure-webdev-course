@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@v7
 
       # project.clj refuses any JDK other than 25, so this is the pinned build.
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "25"
@@ -51,7 +51,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "25"
@@ -182,8 +182,14 @@ jobs:
           if-no-files-found: ignore
 
   app-image:
-    name: Linux app-image (Ubuntu runner)
-    runs-on: ubuntu-latest
+    name: Linux app-image (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # ubuntu-latest migrates to 26.04 during October–November 2026; test
+        # both images now so that migration cannot change the result silently.
+        os: [ubuntu-24.04, ubuntu-26.04]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     defaults:
       run:
@@ -191,7 +197,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "25"
@@ -225,8 +231,130 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: appimage-results
+          name: appimage-results-${{ matrix.os }}
           path: ${{ runner.temp }}/appimage-results.json
+          if-no-files-found: ignore
+
+  uberjar:
+    name: Uberjar (shared with Windows)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Install Leiningen
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein \
+            -o "$RUNNER_TEMP/lein"
+          chmod +x "$RUNNER_TEMP/lein"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      # jpackage cannot cross-build, but the jar it packages is portable. Build
+      # it once here so the Windows job does not need Leiningen under Git Bash.
+      - name: Build uberjar
+        run: lein uberjar
+
+      - name: Upload uberjar
+        uses: actions/upload-artifact@v7
+        with:
+          name: parens-uberjar
+          path: desktop/target/parens-desktop.jar
+          if-no-files-found: error
+
+  macos-app-image:
+    name: macOS app-image
+    runs-on: macos-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Install Leiningen
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein \
+            -o "$RUNNER_TEMP/lein"
+          chmod +x "$RUNNER_TEMP/lein"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Build app image
+        run: bash scripts/build_appimage.sh
+
+      - name: Check app image
+        run: >-
+          node scripts/phase0_check.mjs
+          --command "$(pwd)/target/jpackage/ParensPhase0.app/Contents/MacOS/ParensPhase0"
+          --json "$RUNNER_TEMP/appimage-macos-results.json"
+
+      - name: Upload macOS app-image results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: appimage-results-macos
+          path: ${{ runner.temp }}/appimage-macos-results.json
+          if-no-files-found: ignore
+
+  windows-app-image:
+    name: Windows app-image
+    runs-on: windows-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: parens-uberjar
+          path: desktop/target
+
+      # The Windows runner's shell is PowerShell, but the build script is bash
+      # (Git Bash is preinstalled). REBUILD_JAR=0 uses the shared uberjar.
+      - name: Build app image
+        shell: bash
+        run: REBUILD_JAR=0 bash scripts/build_appimage.sh
+
+      - name: Check app image
+        shell: bash
+        run: >-
+          node scripts/phase0_check.mjs
+          --command "target/jpackage/ParensPhase0/ParensPhase0.exe"
+          --json "$RUNNER_TEMP/appimage-windows-results.json"
+
+      - name: Upload Windows app-image results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: appimage-results-windows
+          path: ${{ runner.temp }}/appimage-windows-results.json
           if-no-files-found: ignore
 
   end-to-end:
@@ -239,7 +367,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "25"
