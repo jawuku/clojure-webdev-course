@@ -17,7 +17,7 @@ env:
 jobs:
   handler-and-worker:
     name: Security boundary + worker recovery
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
       run:
@@ -43,7 +43,7 @@ jobs:
 
   deb:
     name: Ubuntu .deb
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     defaults:
       run:
@@ -107,7 +107,7 @@ jobs:
 
   fedora-rpm:
     name: Fedora 43 .rpm
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     container:
       image: fedora:43
@@ -366,7 +366,7 @@ jobs:
 
   end-to-end:
     name: End-to-end checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     defaults:
       run:

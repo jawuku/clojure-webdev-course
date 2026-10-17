@@ -136,13 +136,37 @@ prerequisites, the RPM built in the container (44 MB), `rpm -ivh` succeeded, the
 installed `/usr/bin/parens` passed **28/28** checks (cold start 526 ms, first eval
 1.04 s, eval p95 3.9 ms, timeout recovery 445 ms, crash recovery 440 ms, no orphan
 worker), `rpm -e parens` removed it, and the RPM plus `rpm-results.json` were uploaded
-as artifacts. The runner reports only deprecation notices for `actions/setup-java@v4`
-and the `ubuntu-latest` image migration, not failures.
+as artifacts. The runner reported only deprecation notices, not failures; the workflow
+now uses `actions/setup-java@v6`.
 
 `proot` changes the userland root, not the kernel, so this validates library resolution
 and package behavior on Ubuntu and Fedora — not installer integration or desktop
 entries. The `app-image` and `fedora-rpm` CI jobs repeat the Ubuntu and Fedora builds
-on GitHub-hosted runners, where all five jobs pass.
+on GitHub-hosted runners, where all eight jobs pass.
+
+## Cross-platform app images
+
+`app-image` builds and checks the Linux app image on both Ubuntu 24.04 and 26.04;
+`macos-app-image` (arm64) and `windows-app-image` (x64) do the same on their host OS,
+since `jpackage` cannot cross-build. All four pass **28/28** (run 39049177456):
+
+| Runner | Cold start | First eval | Eval p95 | Timeout recovery |
+| --- | --- | --- | --- | --- |
+| Ubuntu 24.04 | 2.19 s | 2.81 s | 3.0 ms | 543 ms |
+| Ubuntu 26.04 | 2.37 s | 3.02 s | 3.5 ms | 568 ms |
+| macOS | 0.41 s | 0.84 s | 2.5 ms | 339 ms |
+| Windows | 0.65 s | 1.22 s | 2.7 ms | 487 ms |
+
+Platform handling this required:
+
+- macOS rejects an app version whose first component is zero, so the per-OS app images
+  are packaged as `1.0.0` rather than `0.1.0`.
+- Windows launchers need `--win-console`, otherwise the launcher handshake has no
+  stdout; the evaluator is launched from the bundled runtime's `java.exe`.
+- Windows has no `SIGTERM`, so the checker terminates the process tree with
+  `taskkill /T /F` and compares captured output with normalized newlines.
+- macOS app images are ad-hoc signed (`codesign --sign -`), which Apple silicon
+  requires before it executes them.
 
 ## Checks (28/28 passed on the uberjar, app-image, .deb, and .rpm)
 
@@ -200,16 +224,18 @@ on GitHub-hosted runners, where all five jobs pass.
 
 ## Limitations
 
-- **Linux packaging.** `.deb` (Ubuntu 24.04) and `.rpm` (Fedora 43) are built, installed,
-  and checked on x86_64; other distributions remain untested. macOS/Windows installers
-  require builds on those OSes.
-- **Portability validated on Ubuntu 24.04 and Fedora 43 only**, both under `proot`
-  rather than a VM. `bin/java` had to be copied on both; zlib bundling was needed only
-  on NixOS. The packages are covered above; macOS/Windows remain untested.
+- **Linux installers and all app images.** `.deb` (Ubuntu 24.04) and `.rpm`
+  (Fedora 43) are built, installed, and checked on x86_64. App images also build and
+  pass on Ubuntu 24.04/26.04, macOS arm64, and Windows x64 in CI; `.dmg`, `.msi`, and
+  `.exe` installers are not built yet, and other distributions remain untested.
+- **Local validation on Ubuntu 24.04 and Fedora 43**, both under `proot` rather than a
+  VM. `bin/java` had to be copied on both; zlib bundling was needed only on NixOS.
+  macOS and Windows were exercised only by CI app images, not by an install or a
+  desktop session.
 - **JDK 25 LTS pinned.** `project.clj`, `scripts/run.sh`, and the app-image build reject
   any other Java version. Measured on GraalVM CE 25.0.2 (NixOS) and Temurin 25.0.4.1
-  (Ubuntu). `jpackage`'s runtime can omit native commands, which is why the build copies
-  `bin/java`.
+  (Ubuntu, macOS, and Windows). `jpackage`'s runtime can omit native commands, which is
+  why the build copies `bin/java`.
 - **No real sandbox.** Learner code can read files and use the network. The child process
   protects the app from hangs and exits, not from a malicious user.
 - **Timeout loses worker state.** A runaway snippet kills the REPL's definitions. This is

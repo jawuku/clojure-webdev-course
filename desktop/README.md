@@ -160,13 +160,21 @@ Fedora 43 x86_64; see [`docs/PHASE0_RESULTS.md`](../docs/PHASE0_RESULTS.md). The
 `fedora-rpm` job in `.github/workflows/desktop-ci.yml` repeats the build, tests, and
 install check in a `fedora:43` container on GitHub Actions; it passes 28/28.
 
+## CI
+
+`.github/workflows/desktop-ci.yml` builds and checks the app image on Ubuntu 24.04,
+Ubuntu 26.04, macOS (arm64), and Windows (x64), plus the `.deb` and `.rpm`; every job
+runs the same 28-check suite. The macOS and Windows jobs produce app images, not
+native installers: `.dmg`/`.msi`/`.exe` packaging and code signing are still open.
+
 ## Known limitations
 
-- Linux builds validated on Ubuntu 24.04 and Fedora 43 x86_64 under `proot`;
-  `.deb` and `.rpm` are covered, while macOS/Windows packages are untested.
+- Linux installers validated on Ubuntu 24.04 and Fedora 43 x86_64 under `proot`;
+  macOS arm64 and Windows x64 app images are built and checked only in CI.
+  `.dmg`/`.msi`/`.exe` installers and code signing are untested.
 - JDK 25 LTS is pinned in `project.clj`, `scripts/run.sh`, and the app-image
   build. Measured on GraalVM CE 25.0.2 (NixOS) and Temurin 25.0.4.1 (Ubuntu
-  24.04, under `proot`).
+  24.04 under `proot`, and all CI app images).
 - No true sandbox; see above.
 - Timeout loses REPL/namespace state in the worker.
 - Direct writes to `System/out` (rather than `println`) can corrupt the worker

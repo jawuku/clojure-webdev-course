@@ -171,8 +171,8 @@ Prove the whole shape with the current build, before restructuring:
    down. Repeat on macOS/Windows in CI or a VM.
 6. Measure: cold start, warm eval p95 (target <150 ms), memory (two JVMs).
 
-Result: all six items completed on Linux. macOS/Windows packaging remains a Phase 6 CI
-matrix task, not a Phase 0 blocker.
+Result: all six items completed on Linux. macOS and Windows app images now build and
+pass the checker in CI; native installers remain a Phase 6 task, not a Phase 0 blocker.
 
 **Gate:** if jpackage or the two-process model fails on a target OS, fix it here before any
 content work. This is now a low-risk spike, not a shell bake-off.
@@ -187,8 +187,9 @@ start the HTTP server before the worker; launch the AOT worker class directly; `
 strips native commands (no `bin/java`), and NixOS needs zlib bundled; the
 token/Host/Origin checks now run in CI as the security boundary (`desktop/test`,
 `.github/workflows/desktop-ci.yml`). The build is pinned to JDK 25 LTS. The same
-app-image build also passes 28/28 on Ubuntu 24.04 (plus an installable `.deb`) and
-Fedora 43 (plus an installable `.rpm`).
+app-image build also passes 28/28 on Ubuntu 24.04 and 26.04 (the former with an
+installable `.deb`), Fedora 43 (with an installable `.rpm`), and on macOS (arm64) and
+Windows (x64) in CI. Those last two are app images, not `.dmg`/`.msi` installers.
 
 ### Phase 1 — Vite migration (~4 days)
 
@@ -267,8 +268,9 @@ still measures the pattern source length.
   `.dmg`, Windows `.msi`/`.exe`); JDK 25 LTS (already pinned in Phase 0); app icon,
   version, license files. Ubuntu `.deb` and Fedora `.rpm` packaging paths already exist
   (`desktop/scripts/build_deb.sh`, `build_rpm.sh`); the `.deb`, `.rpm`, and app-image
-  jobs run in CI. Code signing and macOS notarization are optional and need certificates
-  — call them out as release costs.
+  jobs run in CI, including macOS and Windows app images. `.dmg`/`.msi`/`.exe`
+  installers, code signing, and macOS notarization remain — signing needs certificates,
+  so call it out as a release cost.
 - Account for jpackage runtime quirks found in Phase 0: `--strip-native-commands` can
   leave no `bin/java` (the worker needs one; confirmed on Ubuntu 24.04 and Fedora 43
   with Temurin as well), and NixOS needs zlib bundled. Handle these per platform in the
