@@ -204,6 +204,10 @@ function pidAlive(pid) {
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// println uses the platform line separator (\r\n on Windows); the protocol
+// output is otherwise identical, so compare it with normalized newlines.
+const normalizeNewlines = (value) => String(value ?? "").replace(/\r\n/g, "\n");
+
 async function waitForExit(child, timeoutMs = 5000) {
   if (child.exitCode !== null) return child.exitCode;
   return new Promise((resolve) => {
@@ -331,7 +335,7 @@ async function main() {
           result.status === 200 &&
             result.data.ok === true &&
             result.data.value === expectedValue &&
-            result.data.output === expectedOutput,
+            normalizeNewlines(result.data.output) === normalizeNewlines(expectedOutput),
           `${JSON.stringify(result.data.value)} / ${JSON.stringify(result.data.output)}`
         );
       }
