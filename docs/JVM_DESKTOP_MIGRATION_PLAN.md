@@ -237,23 +237,31 @@ where needed), themes/search/REPL shell work, zero console errors, zero external
 **Acceptance:** every exercise solution passes; every snippet runs and matches its recorded
 value/output; timeout recovery and token rejection are covered by tests; eval p95 < 150 ms.
 
-### Phase 3 — Clojure course → JVM semantics (~5 days)
+### Phase 3 — Clojure course → JVM semantics (~5 days) — **DONE**
 
-- `js/Math.max|sqrt|round` → `Math/max|sqrt|round`; `js/Error` → `ex-info`/`Exception`;
-  `js/parseInt` → `parse-long`/`Integer/parseInt`; `(.-length s)` → `(count s)`.
-- `(catch :default e …)` → `(catch Exception e …)` / `Throwable`.
+> Completed: the Clojure course no longer references JavaScript. Numbers teach JVM ratios,
+> Longs and exactness; "Talking to JavaScript" became "Talking to Java" (Math statics and
+> constants, `doto`, Java collections, `java.time`); errors use `ex-info`/`Exception`/
+> `ex-message`; the cheat sheet and "What's Next" CTA point at the JVM web course.
+> `yarn check:semantics --strict` reports 0 occurrences and `yarn audit:content` has 0
+> Clojure failures (31 remain in Web Dev and Regex for Phases 4–5); eval p95 is 15.7 ms.
+> See `PHASE3_RESULTS.md`.
+
+- Replace `js/Math.*` with `Math/sqrt`, `Math/round` and bare constants (`Math/PI`). Java's
+  `Math.max` is two-argument and rejects mixed numeric types, so variadic cases use Clojure's
+  own `max`/`min`.
+- `js/Error` → `ex-info`/`Exception`; `.-message` → `ex-message`; `(catch :default e …)` →
+  `(catch Exception e …)` / `Throwable`.
 - Rewrite the numbers lesson: `(/ 1 2)` → `1/2`, `(/ 10 3)` → `10/3`, `(= 1 1.0)` false,
   `(== 1 1.0)` true, Long overflow, `N`/`M` suffixes, `0.1 + 0.2`, `class`/`type`.
 - Rewrite "Talking to JavaScript" as "Talking to Java": constructors, statics, `.method`,
-  `.-field`, `doto`, `java.time`, Java collections.
+  bare constants, `doto`, `java.time`, Java collections.
 - Update the cheat sheet's JS Interop group and the "What's Next" CTA.
 - Fix every expected output/test that encoded JS semantics (the audit finds them).
-- Shrink `frontend/content-semantics-baseline.json` to empty with `yarn check:semantics`; it
-  scans the `read` blocks, prose and exercise tests that the runtime audit cannot execute.
 
-**Acceptance:** no `js/`, `#js`, `clj->js`/`js->clj`, `.-length`, `cljs`, or
-`catch :default` in the course (enforced by `yarn check:semantics --strict`); 37 lessons run
-clean; 77 exercises pass.
+**Acceptance (met):** no `js/`, `#js`, `clj->js`/`js->clj`, `.-length`, `cljs`, or
+`catch :default` in the course (enforced by `yarn check:semantics --strict`, baseline empty);
+37 lessons run clean; 77 exercises pass.
 
 ### Phase 4 — Course 2 replacement (~8 days)
 

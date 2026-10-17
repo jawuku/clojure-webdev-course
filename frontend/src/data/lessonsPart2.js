@@ -16,11 +16,11 @@ export const lessonsPart2 = [
     ],
     exercises: [
       {
-        prompt: "Write `hypotenuse` for a right triangle: given legs a and b, return the square root of (a*a + b*b). Use a let for the squares. (js/Math.sqrt computes a square root — the JS way, like you'll see in the interop lesson.)",
+        prompt: "Write `hypotenuse` for a right triangle: given legs a and b, return the square root of (a*a + b*b). Use a let for the squares. (Math/sqrt computes a square root and returns a double — see the interop lesson.)",
         starter: "(defn hypotenuse [a b]\n  (let [aa (* a a)\n        bb (* b b)]\n    ))",
         tests: ["(= (hypotenuse 3 4) 5.0)", "(= (hypotenuse 6 8) 10.0)"],
-        solution: "(defn hypotenuse [a b]\n  (let [aa (* a a)\n        bb (* b b)]\n    (js/Math.sqrt (+ aa bb))))",
-        hint: "Return (js/Math.sqrt (+ aa bb)).",
+        solution: "(defn hypotenuse [a b]\n  (let [aa (* a a)\n        bb (* b b)]\n    (Math/sqrt (+ aa bb))))",
+        hint: "Return (Math/sqrt (+ aa bb)).",
       },
       {
         prompt: "Write `discounted` that takes a price and returns it with 20% off, using a let to name the discount amount.",

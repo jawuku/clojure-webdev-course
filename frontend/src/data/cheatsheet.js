@@ -123,18 +123,18 @@ export const CHEATSHEET = [
   {
     group: "Errors & Types",
     items: [
-      { name: "try / catch / finally", desc: "Handle failures gracefully (finally always runs).", example: "(try (throw (js/Error. \"x\")) (catch :default e :caught) (finally (println \"cleanup\")))" },
+      { name: "try / catch / finally", desc: "Handle failures gracefully (finally always runs).", example: "(try (throw (ex-info \"x\" {:code 42})) (catch Exception e (:code (ex-data e))) (finally (println \"cleanup\")))" },
       { name: "ex-info / ex-data", desc: "Errors that carry data.", example: "(ex-data (ex-info \"bad\" {:code 42}))" },
       { name: "defprotocol / defrecord", desc: "Shared behaviour & data types.", example: "(do (defrecord P [x]) (:x (->P 7)))" },
       { name: "reify", desc: "One-off protocol implementation.", example: "(do (defprotocol N (v [_])) (v (reify N (v [_] 5))))" },
     ],
   },
   {
-    group: "JavaScript Interop",
+    group: "Java Interop",
     items: [
-      { name: ".method", desc: "Call a JS method on an object.", example: "(.toUpperCase \"hi\")" },
-      { name: ".-property", desc: "Read a JS property.", example: "(.-length \"clojure\")" },
-      { name: "js/…", desc: "Reach a global JS object.", example: "(js/Math.max 3 9 2)" },
+      { name: ".method", desc: "Call a Java method on an object.", example: "(.toUpperCase \"hi\")" },
+      { name: "Math/…", desc: "Call a static method; write constants bare.", example: "(Math/sqrt 16)" },
+      { name: "java.time", desc: "Use Java's date and time classes.", example: "(.getYear (java.time.LocalDate/parse \"2026-06-15\"))" },
     ],
   },
   {

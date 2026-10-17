@@ -23,10 +23,11 @@ UI, and forwards learner code to a separate, killable **worker JVM**. Every API 
 carries a per-launch token, and the server refuses foreign Host/Origin requests. The app
 ships its own fonts and assets; there is no CDN and no analytics.
 
-> **Migration status:** Phases 0 (JVM slice), 1 (Vite UI) and 2 (runtime API + content
-> audit) are complete. The audit tracks 44 known JavaScript-era snippets/exercises in
-> `frontend/content-audit-baseline.json`; they are migrated in Phases 3–5. Live Reagent
-> previews stay read-only until the JVM UI runtime lands in Phase 4. See
+> **Migration status:** Phases 0 (JVM slice), 1 (Vite UI), 2 (runtime API + content
+> audit) and 3 (Clojure course on JVM semantics) are complete. The audit tracks 31 known
+> JavaScript-era examples in the Web Dev and Regex courses
+> (`frontend/content-audit-baseline.json`); they are migrated in Phases 4–5. Live Reagent
+> previews stay read-only until the Web Dev course is replaced. See
 > [docs/JVM_DESKTOP_MIGRATION_PLAN.md](docs/JVM_DESKTOP_MIGRATION_PLAN.md).
 
 ---
@@ -117,16 +118,16 @@ errors, page errors, failed requests, or external requests.
 `yarn check:semantics` scans every string in the Clojure course, including `read` blocks,
 prose and exercise tests that the runtime audit never executes, and fails on `js/`, `#js`,
 `clj->js`/`js->clj`, `.-length`, `cljs` and `catch :default`.
-`frontend/content-semantics-baseline.json` records the forms Phase 3 has yet to remove; the
-list only shrinks.
+`frontend/content-semantics-baseline.json` is empty since Phase 3; any new occurrence fails
+the check.
 
-`yarn audit:content` runs 222 lesson code blocks, 143 exercise solutions and 153 cheat-sheet
-examples in the worker. `frontend/content-audit-baseline.json` tracks the 44 known
-JavaScript-semantics failures scheduled for Phases 3–5; new failures (or baseline entries
-that start passing) fail the check. `frontend/content-audit-values.json` pins the value and
-printed output of every passing snippet and cheat-sheet example, so content that runs but
-prints something different also fails; refresh it with `--update-values` after reviewing the
-diff.
+`yarn audit:content` runs 230 lesson code blocks, 143 exercise solutions and 153 cheat-sheet
+examples in the worker. `frontend/content-audit-baseline.json` tracks the 31 known
+JavaScript-semantics failures left in the Web Dev and Regex courses (Phases 4–5); new
+failures (or baseline entries that start passing) fail the check.
+`frontend/content-audit-values.json` pins the value and printed output of every passing
+snippet and cheat-sheet example, so content that runs but prints something different also
+fails; refresh it with `--update-values` after reviewing the diff.
 
 ---
 
