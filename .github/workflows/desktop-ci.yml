@@ -295,7 +295,11 @@ jobs:
           chmod +x "$RUNNER_TEMP/lein"
           echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
 
+      # jpackage on macOS rejects a version whose first component is zero,
+      # which 0.1.0 is.
       - name: Build app image
+        env:
+          APP_VERSION: "1.0.0"
         run: bash scripts/build_appimage.sh
 
       - name: Check app image
@@ -314,6 +318,7 @@ jobs:
 
   windows-app-image:
     name: Windows app-image
+    needs: uberjar
     runs-on: windows-latest
     timeout-minutes: 25
     defaults:
@@ -340,6 +345,8 @@ jobs:
       # (Git Bash is preinstalled). REBUILD_JAR=0 uses the shared uberjar.
       - name: Build app image
         shell: bash
+        env:
+          APP_VERSION: "1.0.0"
         run: REBUILD_JAR=0 bash scripts/build_appimage.sh
 
       - name: Check app image

@@ -46,6 +46,19 @@ if [ "$PLATFORM" = linux ] && ! command -v objcopy >/dev/null 2>&1; then
   exit 1
 fi
 
+# jpackage's macOS bundler (and Windows installer versions) require the first
+# component of the app version to be non-zero; 0.1.0 is not a valid bundle
+# version on those platforms.
+if [ "$PLATFORM" != linux ]; then
+  case "$APP_VERSION" in
+    [1-9]* | [1-9]*.*) : ;;
+    *)
+      echo "APP_VERSION must start with a non-zero number on $PLATFORM (got $APP_VERSION); try APP_VERSION=1.0.0." >&2
+      exit 1
+      ;;
+  esac
+fi
+
 if [ "$REBUILD_JAR" = "1" ]; then
   lein uberjar
 fi
