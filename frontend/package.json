@@ -30,6 +30,7 @@
     "build:desktop": "vite build && node scripts/install-ui.mjs",
     "preview": "vite preview",
     "check:offline": "node scripts/check-offline.mjs",
+    "check:semantics": "node scripts/check-content-semantics.mjs",
     "smoke": "node scripts/smoke.mjs",
     "audit:content": "node scripts/audit-content.mjs"
   },

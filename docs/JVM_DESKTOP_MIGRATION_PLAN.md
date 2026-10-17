@@ -248,9 +248,11 @@ value/output; timeout recovery and token rejection are covered by tests; eval p9
   `.-field`, `doto`, `java.time`, Java collections.
 - Update the cheat sheet's JS Interop group and the "What's Next" CTA.
 - Fix every expected output/test that encoded JS semantics (the audit finds them).
+- Shrink `frontend/content-semantics-baseline.json` to empty with `yarn check:semantics`; it
+  scans the `read` blocks, prose and exercise tests that the runtime audit cannot execute.
 
-**Acceptance:** no `js/`, `#js`, `cljs`, or `catch :default` in the course; 37 lessons run
-clean; 77 exercises pass.
+**Acceptance:** no `js/`, `#js`, `cljs`, or `catch :default` in the course (enforced by
+`yarn check:semantics --strict`); 37 lessons run clean; 77 exercises pass.
 
 ### Phase 4 — Course 2 replacement (~8 days)
 

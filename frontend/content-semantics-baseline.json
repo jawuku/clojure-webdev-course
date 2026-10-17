@@ -1,0 +1,22 @@
+{
+  "note": "Known JavaScript/ClojureScript semantics in the Clojure course, removed by Phase 3. Entries are course|lesson|field|token; list indexes are collapsed (content[].code), so moving a block does not require a refresh. New entries fail and entries that no longer occur fail until removed, so this list only shrinks. Refresh with `yarn check:semantics --update-baseline` after reviewing the output; `yarn check:semantics --strict` proves the course is clean.",
+  "known_occurrences": [
+    "clojure|cheatsheet|groups[].items[].example|catch :default",
+    "clojure|cheatsheet|groups[].items[].example|js/",
+    "clojure|cheatsheet|groups[].items[].name|js/",
+    "clojure|errors|content[].code|catch :default",
+    "clojure|errors|content[].code|js/",
+    "clojure|errors|exercises[].solution|catch :default",
+    "clojure|errors|exercises[].tests[]|js/",
+    "clojure|interop|content[].code|js/",
+    "clojure|interop|content[].text|js/",
+    "clojure|interop|exercises[].hint|js/",
+    "clojure|interop|exercises[].prompt|js/",
+    "clojure|interop|exercises[].solution|js/",
+    "clojure|let|exercises[].hint|js/",
+    "clojure|let|exercises[].prompt|js/",
+    "clojure|let|exercises[].solution|js/",
+    "clojure|whats-next|content[].code|js/",
+    "clojure|whats-next|content[].text|cljs"
+  ]
+}

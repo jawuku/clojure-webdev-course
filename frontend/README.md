@@ -64,3 +64,24 @@ output of every passing snippet and cheat-sheet example, keyed by course and ite
 value, a passing item with no recorded entry, or an entry whose content disappeared all fail
 the check. The one genuinely nondeterministic example (a `rand-int` demo) sets
 `nondeterministic: true` on its block and is counted in the summary instead of asserted.
+
+## Content semantics
+
+`yarn check:semantics` is the static companion to the runtime audit. It walks every string in
+the Clojure course — all block types including `read`, prose, exercise prompts, starters,
+solutions, hints and tests, and cheat-sheet items — and fails on `js/`, `#js`, `cljs` or
+`catch :default`, which Phase 3 is removing. The JVM audit cannot see any of those places, so
+this is the gate that keeps JavaScript semantics from creeping back in.
+
+```bash
+yarn check:semantics                  # ratchet check against the baseline
+yarn check:semantics --json /tmp/semantics.json
+yarn check:semantics --update-baseline  # after reviewing the occurrences
+yarn check:semantics --strict         # Phase 3 acceptance: no occurrences at all
+yarn check:semantics --course webdev  # scan another course
+```
+
+`content-semantics-baseline.json` lists the occurrences still present, keyed by
+course, lesson and field (list indexes are collapsed, so moving a block does not churn the
+file). New occurrences fail, and entries that no longer occur fail until removed, so the list
+only shrinks. `--strict` ignores the baseline and fails while anything remains.

@@ -51,6 +51,31 @@ jobs:
             exit 1
           fi
 
+  content-semantics:
+    name: Content semantics (Clojure course)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: yarn install --frozen-lockfile
+
+      # Phase 3 removes js/, #js, cljs and catch :default from the Clojure
+      # course. `read` blocks, prose, hints and exercise tests never reach the
+      # JVM audit, so this static scan is the gate. It fails on new occurrences
+      # and on baseline entries that no longer occur (the list only shrinks).
+      - name: Check course content for JavaScript semantics
+        working-directory: frontend
+        run: yarn check:semantics
+
   content-audit:
     name: Content audit (JVM)
     runs-on: ubuntu-24.04
