@@ -4,9 +4,10 @@
  *
  * The runtime audit executes code, so it never sees JavaScript/ClojureScript
  * forms that sit in `read` blocks, prose, hints or exercise tests. Phase 3
- * removes `js/`, `#js`, `cljs` and `(catch :default …)` from the Clojure
- * course; this guard walks every string in the course data (all block types,
- * exercises and cheat-sheet items) so they cannot creep back in unnoticed.
+ * removes `js/`, `#js`, `clj->js`/`js->clj`, `.-length`, `cljs` and
+ * `(catch :default …)` from the Clojure course; this guard walks every string
+ * in the course data (all block types, exercises and cheat-sheet items) so
+ * they cannot creep back in unnoticed.
  *
  * Today's occurrences are recorded in content-semantics-baseline.json: a new
  * occurrence fails, and an entry that no longer occurs also fails until it is
@@ -30,13 +31,18 @@ const frontendDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const defaultBaseline = path.join(frontendDir, "content-semantics-baseline.json");
 
 // Each pattern matches the form as code, not as part of a longer word:
-// `clj->js` and `js->clj` stay clean, while `shadow-cljs` still counts.
+// `shadow-cljs` still counts as `cljs`, while `.-lengthy` does not match
+// `.-length` and `js->clj` does not contain `clj->js`.
 const TOKENS = [
   { name: "js/", pattern: /\bjs\//g },
   { name: "#js", pattern: /#js\b/g },
+  { name: "clj->js", pattern: /\bclj->js\b/g },
+  { name: "js->clj", pattern: /\bjs->clj\b/g },
+  { name: ".-length", pattern: /\.-length\b/g },
   { name: "cljs", pattern: /\bcljs\b/g },
   { name: "catch :default", pattern: /catch\s+:default\b/g },
 ];
+const tokenList = TOKENS.map((token) => token.name).join(", ");
 
 function parseArgs(argv) {
   const args = {
@@ -88,10 +94,10 @@ function loadBaseline(file) {
 }
 
 const baselineNote =
-  "Known JavaScript/ClojureScript semantics in the Clojure course, removed by Phase 3. " +
-  "Entries are course|lesson|field|token; list indexes are collapsed (content[].code), so " +
-  "moving a block does not require a refresh. New entries fail and entries that no longer " +
-  "occur fail until removed, so this list only shrinks. Refresh with " +
+  `Known JavaScript/ClojureScript semantics (${tokenList}) in the Clojure course, removed ` +
+  "by Phase 3. Entries are course|lesson|field|token; list indexes are collapsed " +
+  "(content[].code), so moving a block does not require a refresh. New entries fail and " +
+  "entries that no longer occur fail until removed, so this list only shrinks. Refresh with " +
   "`yarn check:semantics --update-baseline` after reviewing the output; " +
   "`yarn check:semantics --strict` proves the course is clean.";
 
@@ -219,8 +225,7 @@ function main() {
         `Courses: ${courses.map((course) => `${course.name} (${course.id})`).join(", ")}`
       );
       console.log(
-        `${occurrences.length} occurrence(s) of ${TOKENS.map((token) => token.name).join(", ")} ` +
-          `in ${current.size} location(s)`
+        `${occurrences.length} occurrence(s) of ${tokenList} in ${current.size} location(s)`
       );
 
       if (args.updateBaseline) {
@@ -231,14 +236,12 @@ function main() {
 
       if (args.strict) {
         if (occurrences.length > 0) {
-          console.log("\nJavaScript/ClojureScript semantics remain (--strict):");
+          console.log(`\nJavaScript/ClojureScript semantics remain (--strict):`);
           for (const entry of locations.values()) {
             console.log(`  ${entry.key} ×${entry.count}`);
             console.log(`    ${entry.title} · ${entry.field} · ${entry.samples[0]}`);
           }
-          console.log(
-            "\nThe Clojure course must not reference js/, #js, cljs or catch :default."
-          );
+          console.log(`\nThe Clojure course must not reference ${tokenList}.`);
           return 1;
         }
         console.log("\nCourse is clean: no js/, #js, cljs or catch :default.");

@@ -100,7 +100,7 @@ jobs and `lein uberjar` work from a plain checkout.
 cd frontend
 yarn build                 # production bundle
 yarn check:offline         # fails if the bundle references any external origin
-yarn check:semantics       # fails on js/, #js, cljs or catch :default in the Clojure course
+yarn check:semantics       # fails on JS interop forms left in the Clojure course
 yarn audit:content         # every snippet, exercise and cheat-sheet example in the worker
 yarn smoke                 # drives the real app in Chromium (needs a jar)
 
@@ -116,8 +116,9 @@ errors, page errors, failed requests, or external requests.
 
 `yarn check:semantics` scans every string in the Clojure course, including `read` blocks,
 prose and exercise tests that the runtime audit never executes, and fails on `js/`, `#js`,
-`cljs` or `catch :default`. `frontend/content-semantics-baseline.json` records the forms
-Phase 3 has yet to remove; the list only shrinks.
+`clj->js`/`js->clj`, `.-length`, `cljs` and `catch :default`.
+`frontend/content-semantics-baseline.json` records the forms Phase 3 has yet to remove; the
+list only shrinks.
 
 `yarn audit:content` runs 222 lesson code blocks, 143 exercise solutions and 153 cheat-sheet
 examples in the worker. `frontend/content-audit-baseline.json` tracks the 44 known

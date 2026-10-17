@@ -251,8 +251,9 @@ value/output; timeout recovery and token rejection are covered by tests; eval p9
 - Shrink `frontend/content-semantics-baseline.json` to empty with `yarn check:semantics`; it
   scans the `read` blocks, prose and exercise tests that the runtime audit cannot execute.
 
-**Acceptance:** no `js/`, `#js`, `cljs`, or `catch :default` in the course (enforced by
-`yarn check:semantics --strict`); 37 lessons run clean; 77 exercises pass.
+**Acceptance:** no `js/`, `#js`, `clj->js`/`js->clj`, `.-length`, `cljs`, or
+`catch :default` in the course (enforced by `yarn check:semantics --strict`); 37 lessons run
+clean; 77 exercises pass.
 
 ### Phase 4 — Course 2 replacement (~8 days)
 

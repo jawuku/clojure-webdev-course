@@ -69,8 +69,8 @@ the check. The one genuinely nondeterministic example (a `rand-int` demo) sets
 
 `yarn check:semantics` is the static companion to the runtime audit. It walks every string in
 the Clojure course — all block types including `read`, prose, exercise prompts, starters,
-solutions, hints and tests, and cheat-sheet items — and fails on `js/`, `#js`, `cljs` or
-`catch :default`, which Phase 3 is removing. The JVM audit cannot see any of those places, so
+solutions, hints and tests, and cheat-sheet items — and fails on `js/`, `#js`,
+`clj->js`/`js->clj`, `.-length`, `cljs` and `catch :default`, which Phase 3 is removing. The JVM audit cannot see any of those places, so
 this is the gate that keeps JavaScript semantics from creeping back in.
 
 ```bash

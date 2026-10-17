@@ -68,10 +68,11 @@ jobs:
         working-directory: frontend
         run: yarn install --frozen-lockfile
 
-      # Phase 3 removes js/, #js, cljs and catch :default from the Clojure
-      # course. `read` blocks, prose, hints and exercise tests never reach the
-      # JVM audit, so this static scan is the gate. It fails on new occurrences
-      # and on baseline entries that no longer occur (the list only shrinks).
+      # Phase 3 removes js/, #js, clj->js/js->clj, .-length, cljs and
+      # catch :default from the Clojure course. `read` blocks, prose, hints and
+      # exercise tests never reach the JVM audit, so this static scan is the
+      # gate. It fails on new occurrences and on baseline entries that no longer
+      # occur (the list only shrinks).
       - name: Check course content for JavaScript semantics
         working-directory: frontend
         run: yarn check:semantics
