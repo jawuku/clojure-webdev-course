@@ -158,7 +158,7 @@ post-processing, so the bundled runtime is packaged unchanged. `RPM_MAINTAINER`,
 `APP_VERSION`, `APP_IMAGE_NAME`, and `RPM_RELEASE` override the defaults. Tested on
 Fedora 43 x86_64; see [`docs/PHASE0_RESULTS.md`](../docs/PHASE0_RESULTS.md). The
 `fedora-rpm` job in `.github/workflows/desktop-ci.yml` repeats the build, tests, and
-install check in a `fedora:43` container.
+install check in a `fedora:43` container on GitHub Actions; it passes 28/28.
 
 ## Known limitations
 

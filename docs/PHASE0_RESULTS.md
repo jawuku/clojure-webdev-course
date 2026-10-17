@@ -131,10 +131,18 @@ Validated in the Fedora rootfs: `rpm -ivh` succeeded, `/usr/bin/parens` passed *
 `rpm -e parens` removed the installed files. The `fedora-rpm` job in
 `.github/workflows/desktop-ci.yml` repeats these steps in a `fedora:43` container.
 
+That job has since run on GitHub Actions (run 39047176861): `dnf install` resolved the
+prerequisites, the RPM built in the container (44 MB), `rpm -ivh` succeeded, the
+installed `/usr/bin/parens` passed **28/28** checks (cold start 526 ms, first eval
+1.04 s, eval p95 3.9 ms, timeout recovery 445 ms, crash recovery 440 ms, no orphan
+worker), `rpm -e parens` removed it, and the RPM plus `rpm-results.json` were uploaded
+as artifacts. The runner reports only deprecation notices for `actions/setup-java@v4`
+and the `ubuntu-latest` image migration, not failures.
+
 `proot` changes the userland root, not the kernel, so this validates library resolution
 and package behavior on Ubuntu and Fedora — not installer integration or desktop
 entries. The `app-image` and `fedora-rpm` CI jobs repeat the Ubuntu and Fedora builds
-on native/container runners.
+on GitHub-hosted runners, where all five jobs pass.
 
 ## Checks (28/28 passed on the uberjar, app-image, .deb, and .rpm)
 
