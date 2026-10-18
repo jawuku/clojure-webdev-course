@@ -90,3 +90,7 @@ credentials.json
 # Platform tooling (not project source)
 .emergent/
 .gitconfig
+
+# my own artifacts
+freebuff-chat-*.md
+prompt.txt
