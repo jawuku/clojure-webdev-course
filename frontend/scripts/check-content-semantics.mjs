@@ -6,9 +6,10 @@
  * forms that sit in `read` blocks, prose, hints or exercise tests. Phase 3
  * removed `js/`, `#js`, `clj->js`/`js->clj`, `.-length`, `cljs` and
  * `(catch :default …)` from the Clojure course; Phase 4 removed
- * ClojureScript/Reagent/Scittle from the Web Dev course. This guard walks every
- * string in the course data (all block types, exercises and cheat-sheet items)
- * so they cannot creep back in unnoticed.
+ * ClojureScript/Reagent/Scittle from the Web Dev course; Phase 5 removed
+ * `js/RegExp`, `lastIndex`, `.exec` and `-groups` from the Regex course. This
+ * guard walks every string in the course data (all block types, exercises and
+ * cheat-sheet items) so they cannot creep back in unnoticed.
  *
  * Today's occurrences are recorded in content-semantics-baseline.json: a new
  * occurrence fails, and an entry that no longer occurs also fails until it is
@@ -18,7 +19,7 @@
  * Usage:
  *   node scripts/check-content-semantics.mjs
  *   node scripts/check-content-semantics.mjs --strict
- *   node scripts/check-content-semantics.mjs --course regex
+ *   node scripts/check-content-semantics.mjs --course webdev
  *   node scripts/check-content-semantics.mjs --update-baseline
  *   node scripts/check-content-semantics.mjs --json /tmp/semantics.json
  */
@@ -49,6 +50,11 @@ const TOKENS = [
   { name: "Reagent", pattern: /\breagent\b/gi },
   { name: "Scittle", pattern: /\bscittle\b/gi },
   { name: "r/atom", pattern: /\br\/atom\b/g },
+  // JavaScript's RegExp API is not available on the JVM; the Regex course uses
+  // java.util.regex (re-matcher, .find, .group) instead.
+  { name: "lastIndex", pattern: /\blastIndex\b/g },
+  { name: ".exec", pattern: /\.exec\b/g },
+  { name: ".-groups", pattern: /\.-groups\b/g },
 ];
 const tokenList = TOKENS.map((token) => token.name).join(", ");
 
@@ -86,7 +92,7 @@ function parseArgs(argv) {
       throw new Error(`Unknown argument: ${key}`);
     }
   }
-  if (args.courses.length === 0) args.courses = ["clojure", "webdev"];
+  if (args.courses.length === 0) args.courses = ["clojure", "webdev", "regex"];
   if (args.strict && args.updateBaseline) {
     throw new Error("--strict and --update-baseline are mutually exclusive.");
   }
@@ -102,8 +108,8 @@ function loadBaseline(file) {
 }
 
 const baselineNote =
-  `Known JavaScript/ClojureScript semantics (${tokenList}) in the Clojure and Web Dev ` +
-  "courses, removed by Phases 3–4. Entries are course|lesson|field|token; list indexes are collapsed " +
+  `Known JavaScript/ClojureScript semantics (${tokenList}) in the Clojure, Web Dev and ` +
+  "Regex courses, removed by Phases 3–5. Entries are course|lesson|field|token; list indexes are collapsed " +
   "(content[].code), so moving a block does not require a refresh. New entries fail and " +
   "entries that no longer occur fail until removed, so this list only shrinks. Refresh with " +
   "`yarn check:semantics --update-baseline` after reviewing the output; " +
@@ -249,7 +255,7 @@ function main() {
             console.log(`  ${entry.key} ×${entry.count}`);
             console.log(`    ${entry.title} · ${entry.field} · ${entry.samples[0]}`);
           }
-          console.log(`\nThe Clojure and Web Dev courses must not reference ${tokenList}.`);
+          console.log(`\nThe courses must not reference ${tokenList}.`);
           return 1;
         }
         console.log("\nCourses are clean: no JavaScript/ClojureScript semantics.");

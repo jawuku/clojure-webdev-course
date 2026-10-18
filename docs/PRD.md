@@ -23,25 +23,25 @@ this document is history; the current design is the JVM migration plan in
      in a sandboxed iframe; the capstone is a real Ring app served at `/preview/todos`
      and driven by vendored htmx 2.0.11.
   3. **Regex — Master Regular Expressions** — 18 lessons, 34 exercises, plus Regex Golf.
-     Still taught on JavaScript regex semantics; Phase 5 moves it to `java.util.regex`.
+     Runs on Java's engine (`java.util.regex`): inline flags, `Matcher`-based iteration,
+     `${name}` replacements and named groups read through `re-matcher`.
 - **Content checks:** a JVM audit runs every runnable block, Hiccup preview, exercise
-  solution and cheat-sheet example (383 asserted values, 19 known Regex failures), and a
-  static semantics guard rejects JavaScript/ClojureScript forms in the Clojure and Web Dev
-  courses.
+  solution and cheat-sheet example (402 asserted values, no known failures), and a static
+  semantics guard rejects JavaScript/ClojureScript forms in all three courses.
 - **Progress and theme** are still per course in `localStorage` (Phase 6 replaces this with
   an app-data `state.edn`). Installers are built in CI per OS; signing/notarization still
   needs release certificates.
 
-Phase status: **0–4 complete** (slice, Vite, runtime + audit, Clojure course, Web Dev
-course), **5–7 pending** (Regex, persistence/offline/packaging polish, release). Results:
-[`PHASE0_RESULTS.md`](PHASE0_RESULTS.md) … [`PHASE4_RESULTS.md`](PHASE4_RESULTS.md).
+Phase status: **0–5 complete** (slice, Vite, runtime + audit, Clojure course, Web Dev
+course, Regex on the JVM), **6–7 pending** (persistence/offline/packaging polish, release).
+Results: [`PHASE0_RESULTS.md`](PHASE0_RESULTS.md) … [`PHASE5_RESULTS.md`](PHASE5_RESULTS.md).
 
 ---
 
 ## Historical log
 
 The sections below are the original product log from 2026-06. They describe the
-browser/SCI implementation that Phases 0–4 replaced, and are kept for context. Where a
+browser/SCI implementation that Phases 0–5 replaced, and are kept for context. Where a
 statement is now false (for example, the Vite “decided against” entry), the superseding
 note is inline.
 

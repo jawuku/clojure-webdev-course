@@ -1,8 +1,9 @@
 # Phase 2 — Runtime API + content audit: results
 
 > **Historical snapshot.** The API and audit harness described here are still current, but
-> the baseline counts have changed: Phases 3–4 fixed all Clojure and Web Dev entries, leaving
-> 19 Regex failures for Phase 5. See [`PHASE4_RESULTS.md`](PHASE4_RESULTS.md).
+> the baseline counts have changed: Phases 3–4 fixed all Clojure and Web Dev entries and
+> Phase 5 fixed the last 19 Regex failures, so the baseline is now empty. See
+> [`PHASE5_RESULTS.md`](PHASE5_RESULTS.md).
 
 **Status: PASS.** The runtime API is complete, the content audit runs every snippet, exercise
 solution and cheat-sheet example in the real worker, and both runtime bugs it exposed are

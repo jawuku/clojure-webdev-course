@@ -79,9 +79,9 @@ yarn audit:content --update-baseline  # after reviewing the report
 yarn audit:content --update-values    # after reviewing changed values
 ```
 
-`content-audit-baseline.json` records known content debt (JavaScript regex semantics
-waiting for Phase 5 — the Clojure and Web Dev courses are clean). A new failure fails, and
-an entry that starts passing also fails until it is removed, so the baseline only shrinks.
+`content-audit-baseline.json` records known content debt and is empty since Phase 5: all
+three courses are clean. A new failure fails, and an entry that starts passing also fails
+until it is removed, so the baseline only shrinks.
 
 `content-audit-values.json` records the expected value (`pr-str` of the last form) and printed
 output of every passing snippet and cheat-sheet example, keyed by course and item. A changed
@@ -92,18 +92,19 @@ the check. The one genuinely nondeterministic example (a `rand-int` demo) sets
 ## Content semantics
 
 `yarn check:semantics` is the static companion to the runtime audit. It walks every string in
-the Clojure and Web Dev courses — all block types including `read`, prose, exercise prompts,
-starters, solutions, hints and tests, and cheat-sheet items — and fails on `js/`, `#js`,
-`clj->js`/`js->clj`, `.-length`, `cljs`, `catch :default`, and the retired
-ClojureScript/Reagent/Scittle forms. The JVM audit cannot see any of those places, so this
-is the gate that keeps the old browser-runtime semantics from creeping back in.
+all three courses — all block types including `read`, prose, exercise prompts, starters,
+solutions, hints and tests, and cheat-sheet items — and fails on `js/`, `#js`,
+`clj->js`/`js->clj`, `.-length`, `cljs`, `catch :default`, the retired
+ClojureScript/Reagent/Scittle forms, and the JavaScript RegExp API (`lastIndex`, `.exec`,
+`.-groups`). The JVM audit cannot see any of those places, so this is the gate that keeps
+the old browser-runtime semantics from creeping back in.
 
 ```bash
 yarn check:semantics                  # ratchet check against the baseline
 yarn check:semantics --json /tmp/semantics.json
 yarn check:semantics --update-baseline  # after reviewing the occurrences
 yarn check:semantics --strict         # CI gate: no occurrences at all
-yarn check:semantics --course regex   # scan another course
+yarn check:semantics --course webdev  # scan one course
 ```
 
 `content-semantics-baseline.json` lists the occurrences still present, keyed by

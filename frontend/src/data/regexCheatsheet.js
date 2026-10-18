@@ -1,5 +1,5 @@
 // Quick reference for the Regular Expressions course. Every example is runnable
-// in the in-browser ClojureScript runtime (click Run).
+// on the local JVM through java.util.regex (click Run).
 
 export const REGEX_CHEATSHEET = [
   {
@@ -9,6 +9,7 @@ export const REGEX_CHEATSHEET = [
       { name: "re-seq", desc: "Lazy seq of ALL matches.", example: "(re-seq #\"\\d+\" \"a1 b22\")" },
       { name: "re-matches", desc: "Match the WHOLE string (or nil).", example: "(re-matches #\"\\d+\" \"123\")" },
       { name: "re-pattern", desc: "Build a pattern from a string.", example: "(re-find (re-pattern \"\\\\d+\") \"a9\")" },
+      { name: "re-matcher", desc: "Walk matches yourself with .find and .group.", example: "(let [m (re-matcher #\"\\d+\" \"a1 b22\")] (.find m) (.group m))" },
     ],
   },
   {
@@ -55,20 +56,21 @@ export const REGEX_CHEATSHEET = [
       { name: "replace + fn", desc: "Compute each replacement.", example: "(str/replace \"a1\" #\"\\d\" (fn [d] (str \"[\" d \"]\")))" },
       { name: "str/split", desc: "Split on a pattern.", example: "(str/split \"a,,b\" #\",\")" },
       { name: "str/replace-first", desc: "Rewrite only the FIRST match.", example: "(str/replace-first \"Banana\" #\"a\" \"o\")" },
-      { name: "re-seq + js/parseInt", desc: "Extract numbers as real integers.", example: "(map js/parseInt (re-seq #\"\\d+\" \"3 apples, 14 pens\"))" },
+      { name: "re-seq + parse-long", desc: "Extract numbers as real integers.", example: "(map parse-long (re-seq #\"\\d+\" \"3 apples, 14 pens\"))" },
     ],
   },
   {
     group: "Advanced patterns",
     items: [
-      { name: "flags (i)", desc: "Case-insensitive via js/RegExp.", example: "(re-find (js/RegExp. \"cat\" \"i\") \"The CAT\")" },
-      { name: "flags (m s)", desc: "Multiline: ^/$ match each line · s: . also matches newlines.", example: ";; Real ClojureScript can't attach flags to a #\"...\" literal (JavaScript\n;; patterns can't carry them). This sandbox tolerates JVM-style (?i)/(?m)/(?s),\n;; but that habit won't survive real compilation — so build flags with js/RegExp:\n(re-find (js/RegExp. \"^b\" \"m\") \"alpha\\nbeta\")" },
+      { name: "flags (i)", desc: "Case-insensitive: put (?i) at the start.", example: "(re-find #\"(?i)cat\" \"The CAT\")" },
+      { name: "flags (m s)", desc: "(?m): ^/$ match each line · (?s): . matches newlines.", example: ";; Flags go inside the pattern, and combine: (?im) is both.\n(re-find #\"(?m)^b\" \"alpha\\nbeta\")" },
+      { name: "Pattern/compile", desc: "Build a pattern with flag constants.", example: "(re-find (java.util.regex.Pattern/compile \"cat\" java.util.regex.Pattern/CASE_INSENSITIVE) \"The CAT\")" },
       { name: "(?=…)", desc: "Positive lookahead (followed by).", example: "(re-find #\"\\d+(?=kg)\" \"100kg\")" },
       { name: "(?!…)", desc: "Negative lookahead (not followed by).", example: "(re-find #\"cat(?!\\d)\" \"cat1 caterpillar\")" },
       { name: "(?<=…)", desc: "Positive lookbehind (preceded by).", example: "(re-find #\"(?<=\\$)\\d+\" \"$42\")" },
       { name: "(?<!…)", desc: "Negative lookbehind (not preceded by).", example: "(re-seq #\"(?<!\\$)\\b\\d+\" \"$5 and 7 and $9 and 12\")" },
       { name: "(?<name>…)", desc: "Named capturing group.", example: "(re-find #\"(?<y>\\d{4})\" \"2026\")" },
-      { name: "$<name>", desc: "Use a named group in a replacement.", example: "(str/replace \"2026\" #\"(?<y>\\d{4})\" \"[$<y>]\")" },
+      { name: "${name}", desc: "Use a named group in a replacement (braces).", example: "(str/replace \"2026\" #\"(?<y>\\d{4})\" \"[${y}]\")" },
       { name: "\\1", desc: "Backreference to group 1.", example: "(re-find #\"(.)\\1\" \"book\")" },
     ],
   },

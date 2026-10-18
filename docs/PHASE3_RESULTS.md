@@ -1,8 +1,8 @@
 # Phase 3 — Clojure course → JVM semantics: results
 
 > **Historical snapshot.** The remaining Web Dev and Regex debt mentioned below has since
-> shrunk: Phase 4 replaced Course 2, leaving only the 19 Regex entries for Phase 5. See
-> [`PHASE4_RESULTS.md`](PHASE4_RESULTS.md).
+> been fixed: Phase 4 replaced Course 2 and Phase 5 moved Regex onto `java.util.regex`, so
+> the audit baseline is empty. See [`PHASE5_RESULTS.md`](PHASE5_RESULTS.md).
 
 **Status: PASS.** The Clojure course no longer refers to JavaScript or ClojureScript. Its
 numbers, interop, errors and "What's Next" lessons now teach the JVM runtime they actually

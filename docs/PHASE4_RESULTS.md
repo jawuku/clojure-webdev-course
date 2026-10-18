@@ -1,5 +1,9 @@
 # Phase 4 — Course 2 replacement: results
 
+> **Historical snapshot.** Regex was still on JavaScript semantics when this report was
+> written. Phase 5 migrated it to `java.util.regex`, so the 19 baselined failures mentioned
+> below are gone and the baseline is empty. See [`PHASE5_RESULTS.md`](PHASE5_RESULTS.md).
+
 **Status: PASS.** Course 2 is now **Web Development with Clojure**, built on the JVM with
 Ring, Hiccup and HTMX. Live Hiccup previews are rendered by the real `hiccup.core/html` in
 the worker and shown in a sandboxed iframe, and the capstone is a working Ring app served by

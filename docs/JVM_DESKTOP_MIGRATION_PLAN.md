@@ -1,7 +1,7 @@
 # Parens Desktop — JVM + Vite Migration Plan
 
-Status: Phases 0–4 implemented and passing (see [`PHASE0_RESULTS.md`](PHASE0_RESULTS.md)
-through [`PHASE4_RESULTS.md`](PHASE4_RESULTS.md)); Phases 5–7 are still a proposal.
+Status: Phases 0–5 implemented and passing (see [`PHASE0_RESULTS.md`](PHASE0_RESULTS.md)
+through [`PHASE5_RESULTS.md`](PHASE5_RESULTS.md)); Phases 6–7 are still a proposal.
 
 ## Decisions (recorded)
 
@@ -280,7 +280,15 @@ Build the Ring/Hiccup/HTMX course described in D4.
 sandboxed iframe; the capstone is interactive end-to-end on a local Ring app; no Reagent,
 React UMD, or Scittle anywhere.
 
-### Phase 5 — Regex → `java.util.regex` (~4 days)
+### Phase 5 — Regex → `java.util.regex` (~4 days) — **DONE**
+
+> Completed: the Regex course now runs on Java's engine. Flags are inline `(?i)`/`(?m)`/
+> `(?s)` with `Pattern/compile` constants for dynamic patterns; the "global flag" lesson is
+> a `Matcher` walk (`.find`/`.group`, offset search, statefulness); named groups use
+> `${name}` replacements and `re-matcher`; `js/parseInt` became `parse-long`. The semantics
+> guard now scans all three courses and rejects `lastIndex`/`.exec`/`.-groups`, the audit has
+> **0 failures** with **402 values asserted**, and `yarn smoke` still passes 23/23. See
+> [`PHASE5_RESULTS.md`](PHASE5_RESULTS.md).
 
 - Flags lesson: real `(?i)`, `(?m)`, `(?s)`, `(?U)`, `(?x)`, `Pattern/compile` flags.
 - Delete `js/RegExp`, `lastIndex`, `.test` global-state material; teach `re-find`/`re-seq`/
@@ -291,8 +299,9 @@ React UMD, or Scittle anywhere.
   `str/split` limits.
 - Update `regexCheatsheet.js`, golf hints, and the regex wrap-up.
 
-**Acceptance:** no JS-regex API remains; 18 lessons and 34 exercises pass; golf scoring
-still measures the pattern source length.
+**Acceptance (met):** no JS-regex API remains (`yarn check:semantics --strict` is clean
+across all three courses); 18 lessons and 34 exercises pass; golf scoring still measures
+the pattern source length.
 
 ### Phase 6 — Persistence, offline, packaging (~5 days)
 
@@ -372,10 +381,9 @@ phases. The 74-lesson audit is the long pole, not the backend.
 
 ## 8. Recommended next step
 
-**Phases 0–4 are done. Proceed to Phase 5 (Regex → `java.util.regex`).** The runtime
-contract is frozen and the audit harness now covers all three courses; the only remaining
-content debt is the 19 baselined JavaScript-regex examples. Phase 6 (persistence, offline,
-packaging) can run in parallel, and Phase 7 closes with the docs/release pass.
+**Phases 0–5 are done. Proceed to Phase 6 (persistence, offline, packaging polish).** The
+runtime contract is frozen, all three courses run on JVM semantics, and the audit has no
+known failures left. Phase 7 closes with the docs/release pass.
 
 Carry two items from Phase 0 into CI: an integration test for worker timeout/`System.exit`
 recovery, and the token/Host/Origin rejection tests, which are the security boundary for

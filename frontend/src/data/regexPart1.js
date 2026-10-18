@@ -1,6 +1,6 @@
 // Regular Expressions course — Part 1: Getting Started + Building Blocks.
-// Regexes are taught through Clojure's regex tools, which run live via SCI.
-// Pattern literals are written as #"..." and evaluate to a JS RegExp under the hood.
+// Regexes are taught through Clojure's regex tools, which run in the local JVM.
+// Pattern literals are written as #"..." and compile to java.util.regex.Pattern.
 // Block types: p | h | note | list | code (runnable) | read (static).
 
 export const regexPart1 = [
@@ -11,7 +11,7 @@ export const regexPart1 = [
     summary: "Tiny patterns that find text inside text.",
     content: [
       { t: "p", text: "A regular expression (regex) is a small pattern that describes a set of strings. You use it to search, match, extract, validate and transform text. Once you know a little regex, tasks that felt impossible become one-liners." },
-      { t: "p", text: "In this course you'll run every example live. We use Clojure's regex tools because they run right here in your browser. A pattern is written between #\" and \" — for example #\"cat\" is the pattern that matches the letters c-a-t." },
+      { t: "p", text: "In this course you'll run every example live on the local JVM. We use Clojure's regex tools, which are built on Java's java.util.regex engine. A pattern is written between #\" and \" — for example #\"cat\" is the pattern that matches the letters c-a-t." },
       { t: "h", text: "Your first match" },
       { t: "p", text: "The function re-find looks for the FIRST place a pattern matches inside a string, and returns the matched text (or nil if there's no match). Press Run, then try changing the word." },
       { t: "code", code: "(re-find #\"cat\" \"the cat sat on the mat\")" },

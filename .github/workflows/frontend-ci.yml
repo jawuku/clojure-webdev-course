@@ -52,7 +52,7 @@ jobs:
           fi
 
   content-semantics:
-    name: Content semantics (Clojure + Web Dev)
+    name: Content semantics (all courses)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -70,9 +70,10 @@ jobs:
 
       # Phase 3 removed js/, #js, clj->js/js->clj, .-length, cljs and
       # catch :default from the Clojure course; Phase 4 removed
-      # ClojureScript/Reagent/Scittle from the Web Dev course. `read` blocks,
-      # prose, hints and exercise tests never reach the JVM audit, so this
-      # static scan is the gate. --strict ignores the (now empty) baseline.
+      # ClojureScript/Reagent/Scittle from the Web Dev course; Phase 5 removed
+      # js/RegExp, lastIndex, .exec and -groups from the Regex course. `read`
+      # blocks, prose, hints and exercise tests never reach the JVM audit, so
+      # this static scan is the gate. --strict ignores the (now empty) baseline.
       - name: Check course content for JavaScript semantics
         working-directory: frontend
         run: yarn check:semantics --strict

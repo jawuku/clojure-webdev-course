@@ -1,24 +1,4 @@
 {
   "note": "Known content debt for the JVM migration. The audit fails on new entries and on entries that start passing, so this list only shrinks. Refresh with --update-baseline after reviewing the report.",
-  "known_failures": [
-    "regex|cheatsheet|Advanced patterns/$<name>",
-    "regex|cheatsheet|Advanced patterns/flags (i)",
-    "regex|cheatsheet|Advanced patterns/flags (m s)",
-    "regex|cheatsheet|Transforming text/re-seq + js/parseInt",
-    "regex|exercise|capstone/0",
-    "regex|exercise|flags/0",
-    "regex|exercise|flags/1",
-    "regex|exercise|named-groups/0",
-    "regex|exercise|named-groups/1",
-    "regex|snippet|capstone/3",
-    "regex|snippet|flags/12",
-    "regex|snippet|flags/16",
-    "regex|snippet|flags/18",
-    "regex|snippet|flags/3",
-    "regex|snippet|flags/5",
-    "regex|snippet|global-flag/11",
-    "regex|snippet|global-flag/14",
-    "regex|snippet|named-groups/6",
-    "regex|snippet|named-groups/9"
-  ]
+  "known_failures": []
 }

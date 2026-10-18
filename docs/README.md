@@ -9,7 +9,7 @@ kept in the repo for transparency and future maintainers.
 ### `PRD.md` — Product Requirements & development log
 
 The product requirements document for the multi-course learning app ("Parens").
-Its top section describes the **current** JVM/Vite app (Phases 0–4); the rest is the
+Its top section describes the **current** JVM/Vite app (Phases 0–5); the rest is the
 2026-06 browser/SCI development log, kept for context. It records:
 
 - The **original problem statement** (a beginner web-development course building on the
@@ -30,13 +30,14 @@ Its top section describes the **current** JVM/Vite app (Phases 0–4); the rest 
 It's the best starting point for understanding *why* the codebase looks the way
 it does.
 
-### `PHASE0_RESULTS.md` … `PHASE4_RESULTS.md` — migration QA history
+### `PHASE0_RESULTS.md` … `PHASE5_RESULTS.md` — migration QA history
 
 One report per completed migration phase: the vertical JVM slice (Phase 0), the Vite UI
 (Phase 1), the runtime API and content audit (Phase 2), the Clojure course on JVM semantics
-(Phase 3), and the Ring/Hiccup/HTMX web course (Phase 4). Each records what changed, the
-measured numbers (startup, eval latency, audit baselines, browser checks) and the remaining
-limitations. `JVM_DESKTOP_MIGRATION_PLAN.md` is the plan those reports track.
+(Phase 3), the Ring/Hiccup/HTMX web course (Phase 4), and Regex on `java.util.regex`
+(Phase 5). Each records what changed, the measured numbers (startup, eval latency, audit
+baselines, browser checks) and the remaining limitations. `JVM_DESKTOP_MIGRATION_PLAN.md` is
+the plan those reports track.
 
 ### `test_reports/` — Iteration QA history
 

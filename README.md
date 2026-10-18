@@ -13,8 +13,9 @@ sandbox, and with no network connection once the app has launched.
   **Hiccup** previews rendered by `hiccup.core/html`, **HTMX** attributes, routing and
   JSON, culminating in a live to-do app running as a real local Ring server.
 - **Course 3 — Regex · Master Regular Expressions:** 18 lessons taught through Clojure's
-  regex tools (`re-find`, `re-seq`, `re-matches`, `str/replace`), covering everything from
-  literals to lookarounds, named groups and a live **Regex Golf leaderboard**.
+  regex tools (`re-find`, `re-seq`, `re-matches`, `str/replace`) on Java's engine
+  (`java.util.regex`), covering everything from literals to lookarounds, named groups and a
+  live **Regex Golf leaderboard**.
 
 Switch between courses any time with the **course switcher** in the sidebar. Progress,
 theme and last position are saved **per course** in `localStorage`.
@@ -25,9 +26,9 @@ carries a per-launch token, and the server refuses foreign Host/Origin requests.
 ships its own fonts and assets; there is no CDN and no analytics.
 
 > **Migration status:** Phases 0 (JVM slice), 1 (Vite UI), 2 (runtime API + content
-> audit), 3 (Clojure course on JVM semantics) and 4 (JVM web course) are complete. The
-> audit tracks 19 known JavaScript-regex examples left in the Regex course
-> (`frontend/content-audit-baseline.json`); they are migrated in Phase 5. See
+> audit), 3 (Clojure course on JVM semantics), 4 (JVM web course) and 5 (Regex on
+> `java.util.regex`) are complete. The audit has no known failures left — all three courses
+> are clean — and the semantics baseline is empty. See
 > [docs/JVM_DESKTOP_MIGRATION_PLAN.md](docs/JVM_DESKTOP_MIGRATION_PLAN.md).
 
 ---
@@ -106,7 +107,7 @@ jobs and `lein uberjar` work from a plain checkout.
 cd frontend
 yarn build                 # production bundle
 yarn check:offline         # fails if the bundle references any external origin
-yarn check:semantics       # fails on JS/ClojureScript forms in the Clojure and Web Dev courses
+yarn check:semantics       # fails on JS/ClojureScript forms in all three courses
 yarn audit:content         # every snippet, Hiccup preview, exercise and cheat-sheet example
 yarn smoke                 # drives the real app in Chromium (needs a jar)
 
@@ -121,16 +122,17 @@ courses, bundled fonts, theme/search/REPL/exercise behavior, runs a Hiccup previ
 sandboxed iframe, drives the capstone Ring app through an add and a toggle, and asserts
 zero console errors, page errors, failed requests, or external requests.
 
-`yarn check:semantics` scans every string in the Clojure and Web Dev courses, including
-`read` blocks, prose and exercise tests that the runtime audit never executes, and fails on
-`js/`, `#js`, `clj->js`/`js->clj`, `.-length`, `cljs`, `catch :default`, and the retired
-ClojureScript/Reagent/Scittle forms. `frontend/content-semantics-baseline.json` is empty
-since Phase 4; CI runs the check with `--strict`.
+`yarn check:semantics` scans every string in all three courses, including `read` blocks,
+prose and exercise tests that the runtime audit never executes, and fails on `js/`, `#js`,
+`clj->js`/`js->clj`, `.-length`, `cljs`, `catch :default`, the retired
+ClojureScript/Reagent/Scittle forms, and the JavaScript RegExp API (`lastIndex`, `.exec`,
+`.-groups`). `frontend/content-semantics-baseline.json` is empty since Phase 5; CI runs the
+check with `--strict`.
 
-`yarn audit:content` runs 237 lesson code blocks, 11 Hiccup previews, 149 exercise
-solutions and 150 cheat-sheet examples in the worker. `frontend/content-audit-baseline.json`
-tracks the 19 known JavaScript-regex failures left in the Regex course (Phase 5); new
-failures (or baseline entries that start passing) fail the check.
+`yarn audit:content` runs 240 lesson code blocks, 11 Hiccup previews, 149 exercise
+solutions and 152 cheat-sheet examples in the worker, and asserts 402 values. There are no
+known failures left: `frontend/content-audit-baseline.json` is empty, and new failures (or
+baseline entries that start passing) fail the check.
 `frontend/content-audit-values.json` pins the value and printed output of every passing
 snippet and cheat-sheet example, so content that runs but prints something different also
 fails; refresh it with `--update-values` after reviewing the diff.
