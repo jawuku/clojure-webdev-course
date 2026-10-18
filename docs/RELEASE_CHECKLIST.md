@@ -52,11 +52,13 @@ Use a machine or VM that has never had Parens installed. For each target:
    restored from the app-data `state.edn`. Check that the file exists in the
    platform app-data directory and that clearing the browser site data does not lose
    progress (the file is the source of truth; the browser only mirrors it).
+   The same applies to the app window's isolated browser profile: deleting
+   `<app-data>/browser-profile` must not lose progress either.
 8. Quit and check for orphans:
    - Linux/macOS: `pgrep -fl parens` (or `jps -l`) shows no app or worker JVM;
    - Windows: Task Manager shows no `Parens` or `java.exe` left behind.
-9. Uninstall and confirm the app directory is gone; user data in the browser
-   profile is expected to remain.
+9. Uninstall and confirm the app directory is gone; the app-data directory
+   (`state.edn`, browser profile) is expected to remain.
 
 Repeat for Linux (`.deb` and `.rpm` if both are published), macOS (Apple
 silicon and Intel if both are built), and Windows (`.msi` and `.exe`).
@@ -68,4 +70,6 @@ silicon and Intel if both are built), and Windows (`.msi` and `.exe`).
 - The evaluator is a child JVM with a timeout and a temp working directory, not
   a security sandbox; it is intended for the learner's own code on their own
   machine.
-- Progress is stored in the browser profile, so clearing site data resets it.
+- Progress lives in `state.edn` in the platform app-data directory; the
+  browser profile only mirrors it, so clearing site data or the app window's
+  profile keeps it. Deleting the app-data directory does reset progress.
