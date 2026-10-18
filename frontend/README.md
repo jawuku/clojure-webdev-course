@@ -10,6 +10,7 @@ requires the loopback server.
 yarn install
 
 yarn dev            # Vite dev server on :3000 (UI only — evaluations need the JVM app)
+yarn lint           # ESLint (JS + React hooks), zero warnings allowed
 yarn build          # production bundle in dist/
 yarn build:desktop  # build, then copy dist/ into ../desktop/resources/public
 yarn check:offline  # fail if dist/ references any external script, style, or font
@@ -22,15 +23,39 @@ yarn smoke          # browser end-to-end test against desktop/target/parens-desk
 banner. Use the desktop app (`lein uberjar` in `desktop/`, then run the jar) for
 end-to-end work.
 
+## State
+
+`src/lib/store.js` is the only module that touches storage. In the desktop app the
+source of truth is `state.edn` in the platform app-data directory, reached through
+`GET/PUT /api/state` (see `desktop/README.md`). `hydrateStore()` runs in `index.jsx`
+before React renders and copies every bucket into a `localStorage` mirror, which is
+what `public/theme-init.js` reads for flash-free first paint. On the first launch after
+upgrading from the browser-only build, existing `localStorage` buckets are uploaded
+once. Without a server (`yarn dev`, or the JVM gone) the mirror is the fallback store.
+
+`readBucket`/`writeBucket`/`removeBucket` are synchronous (the mirror updates first,
+the file write is queued in the background), so components never wait on the network.
+
 `yarn smoke` drives Chromium through every lesson in all three courses and checks
 themes, search, the REPL, exercise checking, reload persistence, bundled fonts, a Hiccup
-preview in its sandboxed iframe, and the capstone Ring app (add + toggle), and that no
+preview in its sandboxed iframe, the capstone Ring app (add + toggle), and the topbar's
+**Restart runtime** control (definitions vanish, the page keeps working), and that no
 console errors or external requests occur. Pass `--chrome PATH` or set `CHROME_PATH` to
 use a system browser; otherwise Playwright's expected browser must be installed.
 
 After changing the UI, run `yarn build:desktop` and include the resulting
 `desktop/resources/public` changes with your commit. CI rebuilds the bundle and fails if
 the committed copy is stale.
+
+## Linting
+
+`yarn lint` runs ESLint over `src/` and `scripts/` with `@eslint/js` recommended rules,
+`eslint-plugin-react-hooks`, and `react/jsx-uses-vars` (the core unused-vars rule cannot
+see JSX usage by itself). Warnings fail the build (`--max-warnings 0`). The CI build job
+runs it before `yarn build:desktop`.
+
+CI also runs `yarn smoke` on Ubuntu, macOS and Windows. All three share one uberjar
+artifact; only the browser install differs per OS.
 
 ## Course content
 

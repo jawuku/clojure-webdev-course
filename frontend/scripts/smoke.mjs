@@ -24,6 +24,7 @@
 import { spawn } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
@@ -158,10 +159,18 @@ async function main() {
     throw new Error(`Jar not found at ${args.jar}. Run \`lein uberjar\` in desktop/ first.`);
   }
   const token = crypto.randomBytes(32).toString("base64url");
-  const app = spawn("java", ["-jar", args.jar, "--no-open", "--port", "0", "--token", token], {
-    cwd: path.dirname(args.jar),
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  // Isolated app-data directory: the smoke run must not touch the developer's
+  // real progress, and it starts from empty state every time.
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "parens-smoke-state-"));
+  const app = spawn(
+    "java",
+    ["-jar", args.jar, "--no-open", "--port", "0", "--token", token,
+     "--state-dir", stateDir],
+    {
+      cwd: path.dirname(args.jar),
+      stdio: ["ignore", "pipe", "pipe"],
+    }
+  );
 
   let browser;
   const consoleErrors = [];
@@ -354,6 +363,44 @@ async function main() {
     check("REPL evaluates on the JVM", prompt.includes("user"),
       `prompt ${prompt?.trim()}, value 3`);
 
+    // Reset runtime action: the REPL's definitions disappear and the UI keeps
+    // working against the fresh worker JVM.
+    await setEditor(page, '[data-testid="repl"]', "(def smoke-marker 41)");
+    await page.click('[data-testid="repl-run"]');
+    await page.waitForFunction(
+      () => {
+        const entries = document.querySelectorAll(".repl-entry");
+        const last = entries[entries.length - 1];
+        return last && last.querySelector(".out-value")?.textContent.includes("#'user/smoke-marker");
+      },
+      null,
+      { timeout: 20_000 }
+    );
+    check("REPL definition is live before reset", true);
+
+    await page.click('[data-testid="reset-runtime-btn"]');
+    await page.click('[data-testid="reset-runtime-confirm"]');
+    await page.waitForFunction(
+      () =>
+        document.querySelector('[data-testid="runtime-status"]')?.textContent.includes("Runtime restarted"),
+      null,
+      { timeout: 30_000 }
+    );
+    check("reset runtime reports success", true);
+
+    await setEditor(page, '[data-testid="repl"]', "smoke-marker");
+    await page.click('[data-testid="repl-run"]');
+    await page.waitForFunction(
+      () => {
+        const entries = document.querySelectorAll(".repl-entry");
+        const last = entries[entries.length - 1];
+        return last && last.querySelector(".out-error")?.textContent.includes("smoke-marker");
+      },
+      null,
+      { timeout: 20_000 }
+    );
+    check("reset runtime drops earlier definitions", true);
+
     // Exercise checking + progress persistence.
     await page.click('[data-testid="nav-lesson-0"]');
     await page.waitForSelector('[data-testid="exercise-0"]');
@@ -365,6 +412,37 @@ async function main() {
     await page.reload({ waitUntil: "networkidle" });
     await page.waitForSelector('[data-testid="exercise-solved-0"]');
     check("solved exercise survives reload", true);
+
+    // The desktop app's source of truth is state.edn in the app-data dir.
+    // Wait for the write to land, then prove the UI can rebuild itself from
+    // the file alone: clear the localStorage mirror and reload.
+    const stateFile = path.join(stateDir, "state.edn");
+    let stateText = "";
+    for (let i = 0; i < 30; i += 1) {
+      if (fs.existsSync(stateFile)) {
+        stateText = fs.readFileSync(stateFile, "utf8");
+        if (stateText.includes("parens_clojure_v1") && stateText.includes(":exercises")) break;
+      }
+      await sleep(100);
+    }
+    check(
+      "progress is written to state.edn",
+      stateText.includes("parens_clojure_v1") && stateText.includes(":exercises"),
+      stateText.slice(0, 60)
+    );
+
+    await page.evaluate(() => localStorage.clear());
+    await page.reload({ waitUntil: "networkidle" });
+    await page.waitForSelector('[data-testid="exercise-solved-0"]', { timeout: 20_000 });
+    check("progress hydrates from state.edn after the browser mirror is cleared", true);
+    const hydratedTheme = await page.evaluate(() =>
+      document.documentElement.getAttribute("data-theme")
+    );
+    check(
+      "theme hydrates from state.edn after the browser mirror is cleared",
+      hydratedTheme === "kanagawa",
+      hydratedTheme
+    );
 
     check("no console errors", consoleErrors.length === 0, consoleErrors.join(" | "));
     check("no page errors", pageErrors.length === 0, pageErrors.join(" | "));
@@ -395,6 +473,7 @@ async function main() {
     if (browser) await browser.close().catch(() => {});
     app.kill("SIGTERM");
     await sleep(500);
+    fs.rmSync(stateDir, { recursive: true, force: true });
   }
 }
 

@@ -18,7 +18,8 @@ sandbox, and with no network connection once the app has launched.
   live **Regex Golf leaderboard**.
 
 Switch between courses any time with the **course switcher** in the sidebar. Progress,
-theme and last position are saved **per course** in `localStorage`.
+theme and last position are saved **per course** in the app-data `state.edn` (with a
+`localStorage` mirror for first paint and a browser fallback).
 
 Parens is a desktop app: a small Clojure server binds to **127.0.0.1**, serves the Vite
 UI, and forwards learner code to a separate, killable **worker JVM**. Every API call
@@ -26,9 +27,13 @@ carries a per-launch token, and the server refuses foreign Host/Origin requests.
 ships its own fonts and assets; there is no CDN and no analytics.
 
 > **Migration status:** Phases 0 (JVM slice), 1 (Vite UI), 2 (runtime API + content
-> audit), 3 (Clojure course on JVM semantics), 4 (JVM web course) and 5 (Regex on
-> `java.util.regex`) are complete. The audit has no known failures left — all three courses
-> are clean — and the semantics baseline is empty. See
+> audit), 3 (Clojure course on JVM semantics), 4 (JVM web course), 5 (Regex on
+> `java.util.regex`), 6 (persistence, offline, packaging and launcher polish) and 7
+> (CI, docs, release) are complete. Progress lives in the app-data `state.edn`; the app
+> runs one instance per install (a second launch opens the running window), survives a
+> runaway snippet, opens in a Chromium app window when available, and ships offline
+> installers for all three OSes. The audit has no known failures left and the semantics
+> baseline is empty. See
 > [docs/JVM_DESKTOP_MIGRATION_PLAN.md](docs/JVM_DESKTOP_MIGRATION_PLAN.md).
 
 ---
@@ -47,7 +52,9 @@ ships its own fonts and assets; there is no CDN and no analytics.
 - **Reference Cheat Sheet** per course with click-to-run examples.
 - **Full-text search** across lesson titles, prose and code (`Ctrl/Cmd + K`).
 - **Two themes** — Kanagawa (dark) and Gruvbox (light) — plus adjustable text size.
-- **Progress tracking + resume**, saved per course in `localStorage`.
+- **One instance per install** — a second launch opens the running app; Chromium/Edge/
+  Brave open it as an app window (default browser otherwise).
+- **Progress tracking + resume**, saved per course in the app-data `state.edn`.
 - **Course-complete celebration** with one-click continue to the next course.
 - **Shareable deep-links** (`?lesson=<id>`, `?view=repl`, `?view=cheatsheet`); the
   runtime token is never included in a share URL.
@@ -68,6 +75,12 @@ ships its own fonts and assets; there is no CDN and no analytics.
 
 > The app has no remote backend, auth, or database. The loopback server is part of the
 > desktop process, and evaluation happens in a child JVM on the same machine.
+>
+> **There is no hosted web build, by design.** The UI is served by the JVM that owns the
+> evaluator, and `/api/*` only accepts loopback requests with a per-launch token. Putting
+> that on the public internet would mean executing anonymous learner code on a server;
+> `yarn dev` and `yarn preview` are local development tools, not a deployment target. See
+> [docs/PHASE7_RESULTS.md](docs/PHASE7_RESULTS.md#hosted-web-build--not-supported).
 
 ---
 
@@ -105,6 +118,7 @@ jobs and `lein uberjar` work from a plain checkout.
 
 ```bash
 cd frontend
+yarn lint                  # ESLint (React + hooks), zero warnings allowed
 yarn build                 # production bundle
 yarn check:offline         # fails if the bundle references any external origin
 yarn check:semantics       # fails on JS/ClojureScript forms in all three courses
@@ -112,15 +126,28 @@ yarn audit:content         # every snippet, Hiccup preview, exercise and cheat-s
 yarn smoke                 # drives the real app in Chromium (needs a jar)
 
 cd ../desktop
-lein test                  # security boundary + worker recovery
+lein test                  # API security, worker recovery, state store + launcher
 node scripts/phase0_check.mjs --json /tmp/phase0.json
+node scripts/offline_smoke.mjs --json /tmp/offline-smoke.json
 ```
 
 `yarn smoke` accepts `--jar`, `--json`, and `--chrome PATH` (or `CHROME_PATH`); without a
 path it uses the browser Playwright expects. It checks all 74 lessons across the three
 courses, bundled fonts, theme/search/REPL/exercise behavior, runs a Hiccup preview in its
 sandboxed iframe, drives the capstone Ring app through an add and a toggle, and asserts
-zero console errors, page errors, failed requests, or external requests.
+zero console errors, page errors, failed requests, or external requests. CI runs it on
+Ubuntu, macOS and Windows against one shared uberjar.
+
+`node scripts/offline_smoke.mjs` starts a packaged app (`--command /path/to/launcher`)
+or the uberjar, crawls every asset the shipped HTML/CSS references, and fails if one is
+missing, empty, or points at another origin. It then evaluates Clojure through the
+packaged worker and checks that quitting leaves no orphan JVM. This is the offline gate
+CI runs against the `.deb`, `.rpm`, app images, `.dmg`, `.msi`, and `.exe`;
+[docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) covers the human install pass,
+signing secrets, and release notes.
+
+The topbar's restart control restarts the evaluation worker (`POST /api/reset`): REPL
+definitions are dropped, the page keeps running, and lesson progress is kept.
 
 `yarn check:semantics` scans every string in all three courses, including `read` blocks,
 prose and exercise tests that the runtime audit never executes, and fails on `js/`, `#js`,
@@ -145,11 +172,14 @@ fails; refresh it with `--update-values` after reviewing the diff.
 frontend/
 ├── index.html                 # Vite entry (no CDN, no inline scripts)
 ├── vite.config.mjs            # @vitejs/plugin-react, alias @ -> src
+├── eslint.config.mjs          # flat config: JS + React + hooks (yarn lint)
 ├── public/                    # fonts.css, theme-init.js, favicons, woff2 files,
 │                              # vendor/htmx.min.js (Course 2 capstone)
 ├── scripts/
 │   ├── install-ui.mjs         # copy dist/ -> desktop/resources/public
 │   ├── check-offline.mjs      # fail the build on any external URL
+│   ├── check-content-semantics.mjs  # reject JS/ClojureScript forms in lessons
+│   ├── audit-content.mjs      # run every snippet/exercise on the JVM
 │   └── smoke.mjs              # browser end-to-end test against the JVM app
 └── src/
     ├── App.jsx                # Shell: layout, routing, view/course switching
@@ -160,17 +190,19 @@ frontend/
     ├── data/                  # lesson, exercise and cheat-sheet content
     └── lib/
         ├── runtime.js         # HTTP transport to /api/eval, /api/hiccup and the live preview
+        ├── store.js           # state.edn API + localStorage mirror/fallback
         └── log.js             # dev-only logging helper
 
 desktop/
-├── src/parens/main.clj        # launches the server and the worker
+├── src/parens/main.clj        # launcher: single instance, app window, server + worker
 ├── src/parens/api.clj         # token/Host/Origin-protected loopback API + static files
 ├── src/parens/runtime.clj     # owns the killable worker JVM
 ├── src/parens/worker.clj      # evaluates code, exercises and Hiccup previews
 ├── src/parens/preview.clj     # the live Ring to-do app used by the course-2 capstone
+├── src/parens/state.clj       # atomic app-data state.edn store
 ├── resources/public/          # the built UI (generated by `yarn build:desktop`)
 ├── scripts/                   # packaging, signing, phase checkers
-└── test/                      # API security + worker recovery tests
+└── test/                      # API security, worker recovery + state store tests
 ```
 
 ---
@@ -192,6 +224,15 @@ desktop/
   namespace explicitly. Exercises run in a fresh, unique namespace per attempt.
 - A runaway expression is killed after the timeout; the next request starts a fresh
   worker JVM.
+- Progress, theme, font size, the active course and golf scores live in `state.edn` in
+  the platform app-data directory (`~/.config/parens` on Linux, `~/Library/Application
+  Support/Parens` on macOS, `%APPDATA%\Parens` on Windows). The server writes it
+  atomically (temp file + rename); the browser keeps a `localStorage` mirror for first
+  paint and falls back to it if there is no server. `--state-dir DIR` overrides the
+  location for tests and the packaged checkers.
+- One launcher instance owns a state directory (an OS file lock). A second launch opens
+  the running URL and exits, and the UI opens in a Chromium/Edge/Brave `--app` window
+  with an isolated profile when one is installed, otherwise in the default browser.
 
 ---
 

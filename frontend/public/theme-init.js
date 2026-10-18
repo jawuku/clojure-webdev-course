@@ -2,6 +2,10 @@
    flashes the wrong theme while React boots. Mirrors the effectiveThemeKey
    logic in src/context/AppContext.jsx.
 
+   In the desktop app the source of truth is state.edn; localStorage is a
+   mirror that hydrateStore() refreshes on every load. Reading it here is what
+   makes first paint theme-correct without waiting for an HTTP round trip.
+
    Loaded as a classic script from the page head: the app is served under
    `script-src 'self'`, so this cannot be inlined in index.html. */
 (function () {

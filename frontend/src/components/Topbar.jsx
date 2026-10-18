@@ -1,10 +1,24 @@
 import { useState } from "react";
 import { useApp } from "../context/AppContext";
-import { Sun, Moon, Type, Minus, Plus, Share2, Check } from "lucide-react";
+import { resetRuntime } from "../lib/runtime";
+import { Sun, Moon, Type, Minus, Plus, Share2, Check, RotateCcw } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "./ui/alert-dialog";
 
 export function Topbar({ title, getShareUrl }) {
   const { theme, toggleTheme, fontSize, changeFont } = useApp();
   const [copied, setCopied] = useState(false);
+  const [restarting, setRestarting] = useState(false);
+  const [runtimeStatus, setRuntimeStatus] = useState(null);
 
   // The toggle flips to (and pins) the *other* theme, so label it with the
   // target theme — the effective one is already visible in the UI.
@@ -26,6 +40,16 @@ export function Topbar({ title, getShareUrl }) {
     setTimeout(() => setCopied(false), 1800);
   };
 
+  // A fresh worker JVM: the server keeps serving, but REPL definitions and any
+  // atoms the learner created are gone. Lesson progress is untouched.
+  const restartRuntime = async () => {
+    setRestarting(true);
+    const result = await resetRuntime();
+    setRestarting(false);
+    setRuntimeStatus(result.ok ? "Runtime restarted" : result.error);
+    setTimeout(() => setRuntimeStatus(null), 5000);
+  };
+
   return (
     <header className="topbar" data-testid="topbar">
       <div className="topbar-title" data-testid="topbar-title">
@@ -33,6 +57,40 @@ export function Topbar({ title, getShareUrl }) {
       </div>
 
       <div className="topbar-controls">
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <button
+              className="icon-btn"
+              data-testid="reset-runtime-btn"
+              title="Restart the evaluation runtime"
+              disabled={restarting}
+            >
+              <RotateCcw size={14} />
+            </button>
+          </AlertDialogTrigger>
+          <AlertDialogContent data-testid="reset-runtime-dialog">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Restart the runtime?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This starts a fresh JVM evaluator. Definitions you made in the REPL and
+                anything they hold are cleared; your lesson progress is kept.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel data-testid="reset-runtime-cancel">Cancel</AlertDialogCancel>
+              <AlertDialogAction onClick={restartRuntime} data-testid="reset-runtime-confirm">
+                Restart runtime
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {runtimeStatus && (
+          <span className="runtime-status" role="status" data-testid="runtime-status">
+            {runtimeStatus}
+          </span>
+        )}
+
         <button
           className={`share-btn ${copied ? "copied" : ""}`}
           onClick={share}

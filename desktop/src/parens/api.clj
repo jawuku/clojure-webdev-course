@@ -10,7 +10,8 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [parens.preview :as preview]
-            [parens.runtime :as runtime])
+            [parens.runtime :as runtime]
+            [parens.state :as state])
   (:import [java.lang ProcessHandle]
            [java.nio.charset StandardCharsets]
            [java.security MessageDigest SecureRandom]
@@ -209,6 +210,38 @@
           :else
           (json-response 200 (runtime/run-exercise "exercise" code tests)))))))
 
+(defn- state-read-handler [_request]
+  (try
+    (json-response 200 {:ok true :state (state/read-buckets)})
+    (catch Throwable e
+      (json-response 500 {:ok false
+                          :error (str "Could not read state: " (.getMessage e))}))))
+
+(defn- state-write-handler [request]
+  (let [{:keys [data error]} (read-body request)]
+    (if error
+      (body-error error)
+      (let [key (:key data)]
+        (cond
+          (not (state/valid-key? key))
+          (json-response 400 {:ok false
+                              :error "key must match [A-Za-z0-9_.-]{1,80}."})
+
+          (not (contains? data :value))
+          (json-response 400 {:ok false
+                              :error "value is required (use null to delete a key)."})
+
+          (not (state/editable-value? (:value data)))
+          (json-response 400 {:ok false :error "value must be JSON data."})
+
+          :else
+          (try
+            (json-response 200 (state/write-bucket! key (:value data)))
+            (catch Throwable e
+              (json-response 500 {:ok false
+                                  :error (str "Could not save state: "
+                                              (.getMessage e))}))))))))
+
 (defn- api-handler [request]
   (let [{:keys [request-method uri]} request]
     (cond
@@ -235,6 +268,12 @@
 
       (and (= request-method :post) (= uri "/api/reset"))
       (json-response 200 (merge (runtime/restart!) {:runtime (runtime-info)}))
+
+      (and (= request-method :get) (= uri "/api/state"))
+      (state-read-handler request)
+
+      (and (= request-method :put) (= uri "/api/state"))
+      (state-write-handler request)
 
       :else
       (text-response 404 "Not found."))))

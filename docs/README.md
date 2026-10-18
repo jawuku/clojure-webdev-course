@@ -9,8 +9,8 @@ kept in the repo for transparency and future maintainers.
 ### `PRD.md` — Product Requirements & development log
 
 The product requirements document for the multi-course learning app ("Parens").
-Its top section describes the **current** JVM/Vite app (Phases 0–5); the rest is the
-2026-06 browser/SCI development log, kept for context. It records:
+Its top section describes the **current** JVM/Vite app (Phases 0–7 complete); the rest is
+the 2026-06 browser/SCI development log, kept for context. It records:
 
 - The **original problem statement** (a beginner web-development course building on the
   existing Clojure course, originally written for ClojureScript in the browser).
@@ -30,14 +30,22 @@ Its top section describes the **current** JVM/Vite app (Phases 0–5); the rest 
 It's the best starting point for understanding *why* the codebase looks the way
 it does.
 
-### `PHASE0_RESULTS.md` … `PHASE5_RESULTS.md` — migration QA history
+### `PHASE0_RESULTS.md` … `PHASE7_RESULTS.md` — migration QA history
 
 One report per completed migration phase: the vertical JVM slice (Phase 0), the Vite UI
 (Phase 1), the runtime API and content audit (Phase 2), the Clojure course on JVM semantics
-(Phase 3), the Ring/Hiccup/HTMX web course (Phase 4), and Regex on `java.util.regex`
-(Phase 5). Each records what changed, the measured numbers (startup, eval latency, audit
-baselines, browser checks) and the remaining limitations. `JVM_DESKTOP_MIGRATION_PLAN.md` is
-the plan those reports track.
+(Phase 3), the Ring/Hiccup/HTMX web course (Phase 4), Regex on `java.util.regex`
+(Phase 5), persistence/offline/packaging/launcher (Phase 6), and CI/docs/release
+(Phase 7). Each records what changed, the measured numbers (startup, eval latency, audit
+baselines, browser checks) and the remaining limitations. Phase 7 covers ESLint, the
+per-OS browser matrix, the license/status documentation, and the "no hosted web build"
+decision. `JVM_DESKTOP_MIGRATION_PLAN.md` is the plan those reports track.
+
+### `RELEASE_CHECKLIST.md` — shipping a build
+
+The manual install pass per OS, the signing/notarization secrets, and the automated gates
+that must be green before tagging. CI already installs, checks and uninstalls every
+package; this is the human half.
 
 ### `test_reports/` — Iteration QA history
 
@@ -55,9 +63,13 @@ development. Each report captures:
 - links to any screenshots captured at the time.
 
 The reports are **historical artifacts** — chronological snapshots of the QA
-process, not a current test suite. The current checks are the Vite build guards
-(`yarn check:offline`), the browser smoke test (`frontend/scripts/smoke.mjs`,
-run by `.github/workflows/frontend-ci.yml`) and the JVM security/worker suite.
+process, not a current test suite. The current checks are ESLint (`yarn lint`), the Vite
+build guards (`yarn check:offline`), the browser smoke test
+(`frontend/scripts/smoke.mjs`, run by `.github/workflows/frontend-ci.yml` on Ubuntu, macOS
+and Windows), the packaged offline smoke test
+(`desktop/scripts/offline_smoke.mjs`, run on every installer in
+desktop-ci.yml), the JVM security/worker suite, and the state-store tests
+(`desktop/test/parens/state_test.clj` plus the `/api/state` cases in `api_test.clj`).
 The older `frontend/scripts/audit-*.mjs` scripts (which drove Scittle in a browser) were
 removed in Phase 2; they are replaced by the JVM content audit (`yarn audit:content`).
 

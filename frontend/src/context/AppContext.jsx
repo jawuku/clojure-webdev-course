@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback, useMemo } from "react";
-import { debug } from "../lib/log";
+import { readBucket, writeBucket } from "../lib/store";
 
 const DEFAULT_STORAGE_KEY = "parens_app_v1";
 
@@ -47,15 +47,6 @@ export const THEMES = {
 
 const AppContext = createContext(null);
 
-function load(key) {
-  try {
-    return JSON.parse(localStorage.getItem(key)) || {};
-  } catch (e) {
-    debug("AppContext: could not read localStorage", e);
-    return {};
-  }
-}
-
 // Resolve the OS light/dark preference (guarded for non-browser environments).
 function systemPrefersDark() {
   return (
@@ -66,7 +57,7 @@ function systemPrefersDark() {
 }
 
 export function AppProvider({ children, storageKey = DEFAULT_STORAGE_KEY }) {
-  const initial = load(storageKey);
+  const initial = readBucket(storageKey, {}) || {};
   // themeKey is the *pinned* user choice, or null to follow the OS theme.
   const [themeKey, setThemeKey] = useState(initial.themeKey ?? null);
   const [systemDark, setSystemDark] = useState(systemPrefersDark);
@@ -87,10 +78,7 @@ export function AppProvider({ children, storageKey = DEFAULT_STORAGE_KEY }) {
   const effectiveThemeKey = themeKey ?? (systemDark ? "kanagawa" : "gruvbox");
 
   useEffect(() => {
-    localStorage.setItem(
-      storageKey,
-      JSON.stringify({ themeKey, fontSize, progress, lastLocation })
-    );
+    writeBucket(storageKey, { themeKey, fontSize, progress, lastLocation });
   }, [storageKey, themeKey, fontSize, progress, lastLocation]);
 
   useEffect(() => {

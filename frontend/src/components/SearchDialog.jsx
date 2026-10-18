@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "./ui/dialog";
 import {
   Command,
@@ -44,9 +44,11 @@ export function SearchDialog({ open, onOpenChange, onSelect }) {
   const index = useMemo(() => buildIndex(LESSONS), [LESSONS]);
   const [q, setQ] = useState("");
 
-  useEffect(() => {
-    if (!open) setQ("");
-  }, [open]);
+  // Clear the query when the dialog closes so reopening starts fresh.
+  const handleOpenChange = (next) => {
+    if (!next) setQ("");
+    onOpenChange(next);
+  };
 
   const results = useMemo(() => {
     const query = q.trim().toLowerCase();
@@ -66,7 +68,7 @@ export function SearchDialog({ open, onOpenChange, onSelect }) {
   }, [q, index]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="p-0 overflow-hidden search-dialog" data-testid="search-dialog">
         <DialogTitle className="sr-only">Search lessons</DialogTitle>
         <DialogDescription className="sr-only">
@@ -85,7 +87,10 @@ export function SearchDialog({ open, onOpenChange, onSelect }) {
               <CommandItem
                 key={r.id}
                 value={r.id}
-                onSelect={() => onSelect(r.index)}
+                onSelect={() => {
+                  setQ("");
+                  onSelect(r.index);
+                }}
                 className="search-item"
                 data-testid={`search-result-${r.index}`}
               >

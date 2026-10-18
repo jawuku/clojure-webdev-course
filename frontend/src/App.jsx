@@ -11,7 +11,7 @@ import { CheatSheet } from "@/components/CheatSheet";
 import { CourseComplete } from "@/components/CourseComplete";
 import { COURSES, getCourseById, DEFAULT_COURSE_ID } from "@/course";
 import { waitForRuntime, runtimeReady, setCourseNs } from "@/lib/runtime";
-import { debug } from "@/lib/log";
+import { readBucket, writeBucket } from "@/lib/store";
 import { Menu, X } from "lucide-react";
 
 function readInitialState(course, lastLocation) {
@@ -210,23 +210,14 @@ function Shell({ courses, activeCourseId, onSwitchCourse }) {
 const ACTIVE_COURSE_KEY = "parens_active_course_v1";
 
 function App() {
-  const [courseId, setCourseId] = useState(() => {
-    try {
-      return localStorage.getItem(ACTIVE_COURSE_KEY) || DEFAULT_COURSE_ID;
-    } catch (e) {
-      debug("App: could not read active course from localStorage", e);
-      return DEFAULT_COURSE_ID;
-    }
-  });
+  const [courseId, setCourseId] = useState(() =>
+    readBucket(ACTIVE_COURSE_KEY, DEFAULT_COURSE_ID) || DEFAULT_COURSE_ID
+  );
   const course = getCourseById(courseId);
 
   const switchCourse = useCallback((id) => {
     setCourseId(id);
-    try {
-      localStorage.setItem(ACTIVE_COURSE_KEY, id);
-    } catch (e) {
-      debug("App: could not persist active course to localStorage", e);
-    }
+    writeBucket(ACTIVE_COURSE_KEY, id);
     // Drop any deep-link from the previous course so the new one starts clean.
     const base = window.location.origin + window.location.pathname;
     window.history.replaceState({}, "", base);

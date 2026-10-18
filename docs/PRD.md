@@ -28,13 +28,28 @@ this document is history; the current design is the JVM migration plan in
 - **Content checks:** a JVM audit runs every runnable block, Hiccup preview, exercise
   solution and cheat-sheet example (402 asserted values, no known failures), and a static
   semantics guard rejects JavaScript/ClojureScript forms in all three courses.
-- **Progress and theme** are still per course in `localStorage` (Phase 6 replaces this with
-  an app-data `state.edn`). Installers are built in CI per OS; signing/notarization still
-  needs release certificates.
+- **Progress and theme** are per course in the app-data `state.edn` (atomic writes;
+  `localStorage` is a first-paint mirror and browser fallback, with old browser data
+  imported on first launch). Installers are built, installed and checked in CI per OS;
+  signing/notarization still needs release certificates.
+- **Launcher:** a file lock allows one instance per state directory; a second launch
+  opens the running app's URL and exits. The UI opens in a Chromium `--app` window with
+  its own profile when one is installed, otherwise in the default browser.
+- **CI gates:** `lein test`, the content audit, the semantics guard, ESLint, the Vite
+  build with its committed-bundle and offline checks, the browser smoke test on Linux,
+  macOS and Windows, and a packaged-app check for every installer.
+- **No hosted web build.** The UI is served by the JVM that owns the evaluator and
+  `/api/*` is loopback + token only; a public deployment would mean running anonymous
+  learner code on a server. `yarn dev`/`yarn preview` are local tools.
 
-Phase status: **0–5 complete** (slice, Vite, runtime + audit, Clojure course, Web Dev
-course, Regex on the JVM), **6–7 pending** (persistence/offline/packaging polish, release).
-Results: [`PHASE0_RESULTS.md`](PHASE0_RESULTS.md) … [`PHASE5_RESULTS.md`](PHASE5_RESULTS.md).
+- **Launcher:** one instance per state directory (a second launch opens the running
+  app and exits), a health probe before the UI opens, and Chromium/Edge/Brave `--app`
+  windows with an isolated profile and a default-browser fallback.
+
+Phase status: **0–7 complete** (slice, Vite, runtime + audit, Clojure course, Web Dev
+course, Regex on the JVM, persistence/offline/packaging/launcher, CI/docs/release).
+Results: [`PHASE0_RESULTS.md`](PHASE0_RESULTS.md) … [`PHASE7_RESULTS.md`](PHASE7_RESULTS.md);
+the release pass is [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md).
 
 ---
 

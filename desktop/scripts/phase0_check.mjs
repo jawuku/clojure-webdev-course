@@ -16,6 +16,7 @@ import { spawn, spawnSync } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
+import os from "node:os";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 
@@ -239,7 +240,11 @@ async function main() {
   const command = args.command
     ? [args.command]
     : ["java", "-XX:TieredStopAtLevel=1", "-jar", args.jar];
-  const fullCommand = [...command, "--no-open", "--port", "0", "--token", TOKEN];
+  // Isolated state directory: no test may read or overwrite the real profile,
+  // and the persistence check below needs a directory it fully controls.
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "parens-phase0-state-"));
+  const fullCommand = [...command, "--no-open", "--port", "0", "--token", TOKEN,
+                       "--state-dir", stateDir];
 
   console.log(`Starting app: ${fullCommand.join(" ")}`);
   const startedAt = performance.now();
@@ -261,6 +266,7 @@ async function main() {
     checker.check("launcher printed a token", TOKEN.length >= 32, `${TOKEN.length} chars`);
 
     const port = ready.port;
+    const instanceUrlFile = path.join(stateDir, "instance.url");
 
     let response = await call(port, "GET", "/api/health", null, { token: null });
     checker.check(
@@ -278,6 +284,37 @@ async function main() {
     checker.check(
       "static page has a CSP",
       String(response.headers["content-security-policy"] || "").includes("default-src 'self'")
+    );
+
+    // Single instance: the lock is held and the launch URL is published, so a
+    // second double-click hands off to this server instead of binding a new
+    // port and spawning a second worker JVM.
+    checker.check(
+      "launcher publishes its URL for a second launch",
+      fs.existsSync(instanceUrlFile) &&
+        /^http:\/\/127\.0\.0\.1:\d+\/#token=/.test(
+          fs.readFileSync(instanceUrlFile, "utf8").trim()
+        ),
+      instanceUrlFile
+    );
+    const secondLaunch = spawn(fullCommand[0], fullCommand.slice(1), {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let secondOutput = "";
+    secondLaunch.stdout.on("data", (chunk) => (secondOutput += chunk.toString()));
+    secondLaunch.stderr.on("data", (chunk) => (secondOutput += chunk.toString()));
+    const secondCode = await waitForExit(secondLaunch, 10000);
+    if (secondCode === null) stopApp(secondLaunch);
+    checker.check(
+      "a second launch hands off and exits",
+      secondCode === 0 && /already running/i.test(secondOutput),
+      `exit ${secondCode}, ${JSON.stringify(secondOutput.trim().split("\n").slice(-2))}`
+    );
+    response = await call(port, "GET", "/api/health", null, { token: null });
+    checker.check(
+      "the first instance keeps serving after the second launch",
+      response.status === 200 && response.data.ok === true,
+      response.status
     );
 
     response = await call(port, "POST", "/api/set-ns", { ns: "audit-check" });
@@ -388,6 +425,65 @@ async function main() {
       JSON.stringify(response.data.results)
     );
 
+    // App-data state: the store the UI uses for progress, theme and the active
+    // course. It must be an ordinary EDN file and survive a full app restart.
+    const STATE_BUCKET = "checker_state_v1";
+    response = await call(port, "PUT", "/api/state", {
+      key: STATE_BUCKET,
+      value: { course: "clojure", progress: { welcome: { done: true } } },
+    });
+    checker.check(
+      "state write succeeds",
+      response.status === 200 && response.data.ok === true,
+      response.status
+    );
+    response = await call(port, "GET", "/api/state");
+    checker.check(
+      "state read returns the bucket",
+      response.status === 200 &&
+        response.data.state?.[STATE_BUCKET]?.progress?.welcome?.done === true,
+      JSON.stringify(response.data.state?.[STATE_BUCKET])
+    );
+    const stateFile = path.join(stateDir, "state.edn");
+    const stateText = fs.existsSync(stateFile) ? fs.readFileSync(stateFile, "utf8") : "";
+    checker.check("state.edn is written", stateText.length > 0, stateFile);
+    checker.check(
+      "state.edn is versioned EDN",
+      stateText.includes(":version 1") && stateText.includes(STATE_BUCKET),
+      stateText.slice(0, 80)
+    );
+    checker.check(
+      "no temporary state file is left behind",
+      fs.readdirSync(stateDir).every((name) => !name.endsWith(".tmp")),
+      fs.readdirSync(stateDir).join(", ")
+    );
+
+    // Reset runtime: the UI action behind /api/reset. It must replace the
+    // worker process and drop definitions made in it, while the server and the
+    // page keep running.
+    response = await call(port, "POST", "/api/eval", { code: "(def reset-marker 41)", ns: "user" });
+    checker.check(
+      "definition exists before reset",
+      response.status === 200 && response.data.value === "#'user/reset-marker",
+      response.data.value
+    );
+    const beforeReset = await runtime(port);
+    response = await call(port, "POST", "/api/reset", {});
+    const afterReset = await runtime(port);
+    checker.check(
+      "reset restarts the worker",
+      response.status === 200 &&
+        response.data.ok === true &&
+        afterReset.pid !== beforeReset.pid,
+      `pid ${beforeReset.pid} -> ${afterReset.pid}`
+    );
+    response = await call(port, "POST", "/api/eval", { code: "(resolve 'user/reset-marker)", ns: "user" });
+    checker.check(
+      "reset drops definitions from the old worker",
+      response.status === 200 && response.data.ok === true && response.data.value === "nil",
+      response.data.value
+    );
+
     let before = await runtime(port);
     let started = performance.now();
     response = await call(port, "POST", "/api/eval", { code: "(while true)", ns: "user" });
@@ -491,6 +587,66 @@ async function main() {
     );
     await sleep(2000);
     checker.check("no orphan eval worker", !pidAlive(workerPid), workerPid);
+    checker.check(
+      "launcher removes instance.url on exit",
+      !fs.existsSync(instanceUrlFile),
+      instanceUrlFile
+    );
+
+    // Relaunch against the same --state-dir: this is the "quit and reopen"
+    // path, and the value must still be there. On Unix a fake Chromium records
+    // its argv, proving the app-window command points at the live URL.
+    const browserArgsFile = path.join(stateDir, "browser-args.txt");
+    let relaunchArgs = fullCommand.slice(1);
+    let relaunchEnv = process.env;
+    if (!IS_WINDOWS) {
+      const fakeBrowser = path.join(stateDir, "fake-browser.sh");
+      fs.writeFileSync(
+        fakeBrowser,
+        `#!/bin/sh\nprintf '%s\\n' "$@" > ${JSON.stringify(browserArgsFile)}\n`
+      );
+      fs.chmodSync(fakeBrowser, 0o755);
+      relaunchArgs = relaunchArgs.filter((arg) => arg !== "--no-open");
+      relaunchEnv = { ...process.env, PARENS_BROWSER: fakeBrowser };
+    }
+    const relaunch = spawn(fullCommand[0], relaunchArgs, {
+      env: relaunchEnv,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    try {
+      const readyAgain = await readReady(relaunch);
+      TOKEN = readyAgain.token || TOKEN;
+      const persisted = await call(readyAgain.port, "GET", "/api/state");
+      checker.check(
+        "state survives an app restart",
+        persisted.status === 200 &&
+          persisted.data.state?.[STATE_BUCKET]?.course === "clojure",
+        JSON.stringify(persisted.data.state?.[STATE_BUCKET])
+      );
+
+      if (!IS_WINDOWS) {
+        let browserArgs = "";
+        for (let i = 0; i < 50 && !browserArgs; i += 1) {
+          if (fs.existsSync(browserArgsFile)) {
+            browserArgs = fs.readFileSync(browserArgsFile, "utf8");
+          }
+          if (!browserArgs) await sleep(100);
+        }
+        checker.check(
+          "app window receives the live URL",
+          browserArgs.includes(`--app=http://127.0.0.1:${readyAgain.port}/#token=`),
+          browserArgs.split("\n")[0] || "(no browser invocation)"
+        );
+        checker.check(
+          "app window uses an isolated profile",
+          browserArgs.includes("--user-data-dir="),
+          browserArgs.split("\n")[1] || ""
+        );
+      }
+    } finally {
+      stopApp(relaunch);
+      await waitForExit(relaunch);
+    }
 
     checker.check("no failing checks", checker.failures === 0, `${checker.failures} failure(s)`);
 
@@ -521,6 +677,7 @@ async function main() {
         await waitForExit(child);
       }
     }
+    fs.rmSync(stateDir, { recursive: true, force: true });
   }
 }
 

@@ -85,6 +85,14 @@ jobs:
           --command /usr/bin/parens
           --json "$RUNNER_TEMP/deb-results.json"
 
+      # The installed package must carry every asset the UI references: no CDN,
+      # no first-run download. Crawls the shipped HTML/CSS and evaluates code.
+      - name: Offline smoke (installed .deb)
+        run: >-
+          node scripts/offline_smoke.mjs
+          --command /usr/bin/parens
+          --json "$RUNNER_TEMP/deb-offline.json"
+
       - name: Uninstall package
         if: always()
         run: sudo dpkg -r parens || true
@@ -161,6 +169,13 @@ jobs:
           --command /usr/bin/parens
           --json "$RUNNER_TEMP/rpm-results.json"
 
+      - name: Offline smoke (installed .rpm)
+        working-directory: desktop
+        run: >-
+          node scripts/offline_smoke.mjs
+          --command /usr/bin/parens
+          --json "$RUNNER_TEMP/rpm-offline.json"
+
       - name: Erase package
         if: always()
         run: rpm -e parens || true
@@ -226,6 +241,12 @@ jobs:
           node scripts/phase0_check.mjs
           --command "$(pwd)/target/jpackage/ParensPhase0/bin/ParensPhase0"
           --json "$RUNNER_TEMP/appimage-results.json"
+
+      - name: Offline smoke (app image)
+        run: >-
+          node scripts/offline_smoke.mjs
+          --command "$(pwd)/target/jpackage/ParensPhase0/bin/ParensPhase0"
+          --json "$RUNNER_TEMP/appimage-offline.json"
 
       - name: Upload app-image results
         if: always()
@@ -309,6 +330,12 @@ jobs:
           --command "$(pwd)/target/jpackage/ParensPhase0.app/Contents/MacOS/ParensPhase0"
           --json "$RUNNER_TEMP/appimage-macos-results.json"
 
+      - name: Offline smoke (app image)
+        run: >-
+          node scripts/offline_smoke.mjs
+          --command "$(pwd)/target/jpackage/ParensPhase0.app/Contents/MacOS/ParensPhase0"
+          --json "$RUNNER_TEMP/appimage-macos-offline.json"
+
       - name: Upload macOS app-image results
         if: always()
         uses: actions/upload-artifact@v7
@@ -342,6 +369,12 @@ jobs:
           node scripts/phase0_check.mjs
           --command /Applications/ParensPhase0.app/Contents/MacOS/ParensPhase0
           --json "$RUNNER_TEMP/dmg-macos-results.json"
+
+      - name: Offline smoke (installed .dmg)
+        run: >-
+          node scripts/offline_smoke.mjs
+          --command /Applications/ParensPhase0.app/Contents/MacOS/ParensPhase0
+          --json "$RUNNER_TEMP/dmg-macos-offline.json"
 
       - name: Uninstall app
         if: always()
@@ -406,6 +439,13 @@ jobs:
           node scripts/phase0_check.mjs
           --command "target/jpackage/ParensPhase0/ParensPhase0.exe"
           --json "$RUNNER_TEMP/appimage-windows-results.json"
+
+      - name: Offline smoke (app image)
+        shell: bash
+        run: >-
+          node scripts/offline_smoke.mjs
+          --command "target/jpackage/ParensPhase0/ParensPhase0.exe"
+          --json "$RUNNER_TEMP/appimage-windows-offline.json"
 
       - name: Upload Windows app-image results
         if: always()
@@ -500,6 +540,13 @@ jobs:
           --command "${{ steps.installed.outputs.exe }}"
           --json "$RUNNER_TEMP/msi-windows-results.json"
 
+      - name: Offline smoke (installed .msi)
+        shell: bash
+        run: >-
+          node scripts/offline_smoke.mjs
+          --command "${{ steps.installed.outputs.exe }}"
+          --json "$RUNNER_TEMP/msi-windows-offline.json"
+
       - name: Uninstall .msi
         if: always()
         shell: pwsh
@@ -579,6 +626,13 @@ jobs:
           node scripts/phase0_check.mjs
           --command "${{ steps.installed_exe.outputs.exe }}"
           --json "$RUNNER_TEMP/exe-windows-results.json"
+
+      - name: Offline smoke (installed .exe)
+        shell: bash
+        run: >-
+          node scripts/offline_smoke.mjs
+          --command "${{ steps.installed_exe.outputs.exe }}"
+          --json "$RUNNER_TEMP/exe-windows-offline.json"
 
       - name: Uninstall .exe
         if: always()

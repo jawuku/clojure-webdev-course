@@ -1,7 +1,11 @@
 # Parens Desktop — JVM + Vite Migration Plan
 
 Status: Phases 0–5 implemented and passing (see [`PHASE0_RESULTS.md`](PHASE0_RESULTS.md)
-through [`PHASE5_RESULTS.md`](PHASE5_RESULTS.md)); Phases 6–7 are still a proposal.
+through [`PHASE5_RESULTS.md`](PHASE5_RESULTS.md)). Phase 6 is complete: the runtime
+reset action, the app-data `state.edn` store, the packaged offline smoke test,
+per-OS installers, and launcher polish (single-instance lock, readiness probe,
+Chromium `--app` window with fallback). Phase 7 is complete — see
+[`PHASE6_RESULTS.md`](PHASE6_RESULTS.md) and [`PHASE7_RESULTS.md`](PHASE7_RESULTS.md).
 
 ## Decisions (recorded)
 
@@ -307,9 +311,20 @@ the pattern source length.
 
 - Replace `localStorage` with a platform app-data `state.edn` (atomic write): theme, font,
   progress, last location, active course, golf scores. Browser fallback behind one store
-  API. Optionally import old `localStorage` keys.
-- Fully offline: no JCEF (already), no CDN, no first-run downloads. Add an offline smoke
-  test and a "Reset runtime" action.
+  API. Optionally import old `localStorage` keys. **Done:** `parens.state` owns the file
+  (temp write + atomic rename, corrupt files moved aside), `GET/PUT /api/state` is
+  token-protected, and `frontend/src/lib/store.js` is the one store API. It hydrates the
+  mirror before React renders, imports old browser buckets on first launch, and keeps
+  working from `localStorage` when no server answers. `--state-dir` gives tests and
+  checkers an isolated directory; `phase0_check.mjs` proves the value survives an app
+  restart and the browser smoke test proves the UI rebuilds from the file after the
+  mirror is cleared.
+- Fully offline: no JCEF (already), no CDN, no first-run downloads. **Done:** the
+  topbar's restart control calls `POST /api/reset` and replaces the worker JVM (REPL
+  definitions are dropped, the page keeps running, progress is kept), and
+  `desktop/scripts/offline_smoke.mjs` crawls every asset the packaged UI references,
+  evaluates Clojure through the packaged worker, and runs in CI against the app images
+  and every installer.
 - `jpackage` per OS in a GitHub Actions matrix (Linux `.deb`/`.rpm`/app-image, macOS
   `.dmg`, Windows `.msi`/`.exe`); JDK 25 LTS (already pinned in Phase 0); app icon,
   version, license files. Ubuntu `.deb` and Fedora `.rpm` packaging paths already exist
@@ -325,6 +340,12 @@ the pattern source length.
   build script rather than by hand.
 - Launcher: single-instance lock, fixed-or-free loopback port, wait-for-ready, browser
   app-window with fallback, clean shutdown, window size irrelevant (browser owns it).
+  **Done:** `instance.lock` is held with an OS file lock (released on crash) and
+  `instance.url` is published atomically, so a second launch opens the running instance
+  and exits instead of binding another port/worker. A health probe gates the browser
+  launch; Chromium/Edge/Brave open with `--app=` and an isolated profile under the
+  app-data dir, with the default browser as fallback (`--no-app-window` forces it).
+  `--port` still fixes the port, with a friendly error when it is taken.
 - Keep `?lesson=` / `?view=` deep links.
 
 **Acceptance:** fresh offline install on all three OSes opens the UI, runs code, persists
@@ -333,11 +354,21 @@ progress across restarts, survives a runaway snippet, and leaves no orphan JVMs 
 ### Phase 7 — CI, docs, release (~3 days)
 
 - CI: Clojure tests + full lesson audit, Vite build, ESLint, Playwright smoke test per OS.
-  Manual install smoke per OS.
+  Manual install smoke per OS. **Done:** `frontend-ci.yml` runs `yarn lint`, the build,
+  the audit and the browser smoke on Ubuntu, macOS and Windows from one shared uberjar;
+  `desktop-ci.yml` installs and checks every package; the human pass lives in
+  [`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md).
 - Update `README.md`, `docs/PRD.md`, this plan's status, licenses (MIT app + CC BY content;
-  htmx and any vendored assets keep their own licenses).
+  htmx and any vendored assets keep their own licenses). **Done:** the two license files
+  already covered the app and all three courses; the docs now share one phase status.
 - Decide whether a hosted web build remains supported. The HTTP split makes it nearly free,
-  but it needs a real server and is not required.
+  but it needs a real server and is not required. **Decided:** no hosted build. The UI is
+  served by the JVM that owns the evaluator, `/api/*` is loopback-only, and publishing it
+  would mean executing anonymous learner code on a public server.
+
+**Acceptance (met):** lint, build, audit, semantics, and the browser smoke test are all
+required CI gates, and the smoke test runs on all three desktop targets. See
+[`PHASE7_RESULTS.md`](PHASE7_RESULTS.md) for the evidence and the release limitations.
 
 ## 5. Order and parallelism
 
@@ -381,10 +412,13 @@ phases. The 74-lesson audit is the long pole, not the backend.
 
 ## 8. Recommended next step
 
-**Phases 0–5 are done. Proceed to Phase 6 (persistence, offline, packaging polish).** The
-runtime contract is frozen, all three courses run on JVM semantics, and the audit has no
-known failures left. Phase 7 closes with the docs/release pass.
+**Phases 0–7 are complete.** The reset-runtime action, the app-data `state.edn` store, the
+packaged offline smoke test, the per-OS installers, and launcher polish (single-instance
+lock, readiness probe, Chromium `--app` window with fallback) are in place. The runtime
+contract is frozen, all three courses run on JVM semantics, the audit has no known
+failures left, and both the CI/docs/release pass and the launcher work are gated by
+`lein test`, `phase0_check.mjs` and the browser smoke test.
 
-Carry two items from Phase 0 into CI: an integration test for worker timeout/`System.exit`
-recovery, and the token/Host/Origin rejection tests, which are the security boundary for
-the loopback eval API.
+The remaining work is release engineering rather than product work: signing and
+notarization need certificates and API keys ([`RELEASE_CHECKLIST.md`](RELEASE_CHECKLIST.md)),
+and the installer jobs should get one manual install pass on real desktops per OS.

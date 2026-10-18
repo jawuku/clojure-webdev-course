@@ -5,12 +5,17 @@
   fast enough for every CI run. The end-to-end checker also exercises the same
   rules over a real loopback connection."
   (:require [cheshire.core :as json]
+            [clojure.edn :as edn]
+            [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [parens.api :as api]
             [parens.preview :as preview]
-            [parens.runtime :as runtime])
-  (:import [java.io StringReader]))
+            [parens.runtime :as runtime]
+            [parens.state :as state])
+  (:import [java.io StringReader]
+           [java.nio.file Files]
+           [java.nio.file.attribute FileAttribute]))
 
 (def ^:private token "test-token-0123456789abcdef")
 
@@ -28,8 +33,16 @@
 (defn- post-json [uri body & [opts]]
   (request :post uri (merge {:body body} opts)))
 
+(defn- put-json [uri body & [opts]]
+  (request :put uri (merge {:body body} opts)))
+
 (defn- body [response]
   (json/parse-string (:body response) true))
+
+;; Like `body`, but keeps object keys as strings so tests can look up bucket
+;; names (the state API echoes exactly what it stored).
+(defn- string-body [response]
+  (json/parse-string (:body response)))
 
 (defn- body-text [response]
   (let [raw (:body response)]
@@ -112,6 +125,112 @@
     ;; evaluation worker.
     (let [response ((handler) (request :get "/api/nope" {:token token}))]
       (is (= 404 (:status response))))))
+
+(deftest reset-runtime-is-token-protected
+  ;; The success path is covered end to end (phase0_check.mjs and
+  ;; runtime_test.clj) because restarting really spawns a JVM; these only prove
+  ;; the RESTART action cannot be reached without the launch token.
+  (is (= 401 (:status ((handler) (post-json "/api/reset" "{}")))))
+  (is (= 401 (:status ((handler) (post-json "/api/reset" "{}" {:token "wrong"})))))
+  (is (= 403 (:status ((handler) (post-json "/api/reset" "{}"
+                                         {:token token
+                                          :headers {"origin" "http://evil.example"}}))))))
+
+;; ---------------------------------------------------------------------------
+;; State store (app-data state.edn)
+
+(defn- with-state-dir [run]
+  (let [dir (str (Files/createTempDirectory "parens-api-state-"
+                                            (make-array FileAttribute 0)))]
+    (try
+      (state/configure! dir)
+      (run dir)
+      (finally
+        (state/configure! nil)
+        (doseq [file (reverse (file-seq (io/file dir)))]
+          (.delete file))))))
+
+(deftest state-api-roundtrips-through-the-edn-file
+  (with-state-dir
+    (fn [dir]
+      (let [handler (handler)]
+        (testing "a fresh install has no buckets"
+          (let [response (handler (request :get "/api/state" {:token token}))]
+            (is (= 200 (:status response)))
+            (is (= {} (:state (body response))))))
+
+        (testing "a course bucket is written and read back"
+          (let [course-state {"themeKey" "gruvbox"
+                              "progress" {"welcome" {"done" true}}}
+                payload (json/generate-string {:key "parens_clojure_v1"
+                                               :value course-state})
+                response (handler (put-json "/api/state" payload {:token token}))]
+            (is (= 200 (:status response)))
+            (is (true? (:ok (body response))))
+            (is (.exists (io/file dir "state.edn")))
+            (is (= course-state
+                   (get (get (string-body (handler (request :get "/api/state"
+                                                                     {:token token})))
+                             "state")
+                        "parens_clojure_v1")))))
+
+        (testing "plain JSON values are allowed (active course, celebrated flag)"
+          (doseq [[key value expected] [["parens_active_course_v1" "clojure" "clojure"]
+                                        ["parens_clojure_v1__celebrated" true true]
+                                        ["regex_golf_scores_v1" {"double" 5} {"double" 5}]]]
+            (is (= 200 (:status (handler
+                                 (put-json "/api/state"
+                                           (json/generate-string {:key key :value value})
+                                           {:token token})))))
+            (is (= expected
+                   (get (get (string-body (handler (request :get "/api/state"
+                                                                     {:token token})))
+                             "state")
+                        key)))))
+
+        (testing "null deletes a bucket"
+          (is (= 200 (:status (handler
+                               (put-json "/api/state"
+                                         "{\"key\":\"parens_active_course_v1\",\"value\":null}"
+                                         {:token token})))))
+          (is (not (contains? (get (string-body (handler (request :get "/api/state"
+                                                                        {:token token})))
+                                   "state")
+                              "parens_active_course_v1"))))
+
+        (testing "the file is versioned EDN"
+          (let [data (edn/read-string (slurp (io/file dir "state.edn")))]
+            (is (= 1 (:version data)))
+            (is (contains? (:buckets data) "parens_clojure_v1"))))
+
+        (testing "restarting the server on the same directory keeps the state"
+          (state/configure! dir)
+          (is (= {"themeKey" "gruvbox" "progress" {"welcome" {"done" true}}}
+                 (get (get (string-body (handler (request :get "/api/state"
+                                                                   {:token token})))
+                           "state")
+                      "parens_clojure_v1"))))))))
+
+(deftest state-api-validates-keys-and-bodies
+  (with-state-dir
+    (fn [_dir]
+      (doseq [payload ["{\"key\":\"../escape\",\"value\":{}}"
+                       "{\"key\":\"\",\"value\":{}}"
+                       "{\"key\":\"has space\",\"value\":{}}"
+                       "{\"key\":\"missing-value\"}"]]
+        (is (= 400 (:status ((handler) (put-json "/api/state" payload {:token token}))))
+            payload))
+      (is (= 400 (:status ((handler) (put-json "/api/state" "not json" {:token token})))))
+      (is (= {} (:state (body ((handler) (request :get "/api/state" {:token token})))))))))
+
+(deftest state-api-is-token-protected
+  (is (= 401 (:status ((handler) (request :get "/api/state")))))
+  (is (= 401 (:status ((handler) (put-json "/api/state"
+                                          "{\"key\":\"parens_x\",\"value\":1}")))))
+  (is (= 401 (:status ((handler) (request :get "/api/state" {:token "wrong"})))))
+  (is (= 403 (:status ((handler) (request :get "/api/state"
+                                          {:token token
+                                           :headers {"origin" "http://evil.example"}}))))))
 
 (deftest health-needs-no-token-but-still-checks-fetch-site
   (is (= 403 (:status ((handler) (request :get "/api/health"

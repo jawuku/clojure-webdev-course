@@ -155,3 +155,26 @@
       (runtime/stop!) ; safe to call twice
       (is (nil? (runtime/worker-pid)))
       (is (= "3" (:value (evaluate "(+ 1 2)")))))))
+
+(deftest restart-starts-a-fresh-worker-and-drops-definitions
+  (with-worker
+    (fn []
+      (let [before (runtime/start!)]
+        (testing "the definition exists in the running worker"
+          (is (= "#'user/restart-marker" (:value (evaluate "(def restart-marker 41)"))))
+          (is (= "41" (:value (evaluate "restart-marker")))))
+
+        (testing "restart! reports a new worker process"
+          (let [result (runtime/restart!)]
+            (is (true? (:ok result)))
+            (is (some? (:pid result)))
+            (is (not= (:pid before) (:pid result)))
+            (is (= (:pid result) (runtime/worker-pid)))))
+
+        (testing "the fresh worker no longer knows the definition"
+          (let [resolved (evaluate "(resolve 'user/restart-marker)")]
+            (is (true? (:ok resolved)))
+            (is (= "nil" (:value resolved)))))
+
+        (testing "evaluation still works after the restart"
+          (is (= "3" (:value (evaluate "(+ 1 2)")))))))))

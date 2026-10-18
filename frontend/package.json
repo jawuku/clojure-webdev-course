@@ -31,6 +31,7 @@
     "preview": "vite preview",
     "check:offline": "node scripts/check-offline.mjs",
     "check:semantics": "node scripts/check-content-semantics.mjs",
+    "lint": "eslint src scripts --max-warnings 0",
     "smoke": "node scripts/smoke.mjs",
     "audit:content": "node scripts/audit-content.mjs"
   },
@@ -55,8 +56,13 @@
     "http-proxy-middleware": "2.0.10"
   },
   "devDependencies": {
+    "@eslint/js": "9.39.5",
     "@vitejs/plugin-react": "^5.0.0",
     "autoprefixer": "10.4.20",
+    "eslint": "9.39.5",
+    "eslint-plugin-react": "7.37.5",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "16.5.0",
     "playwright-core": "1.64.1",
     "postcss": "8.5.10",
     "tailwindcss": "3.4.17",

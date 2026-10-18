@@ -5,6 +5,5 @@ export function debug(...args) {
   // Vite replaces import.meta.env.PROD at build time; `process` is not defined
   // in the browser, so the old process.env check always logged.
   if (import.meta.env.PROD) return;
-  // eslint-disable-next-line no-console
   console.debug(...args);
 }

@@ -3,20 +3,21 @@ import { useApp } from "../context/AppContext";
 import { useCourse } from "../context/CourseContext";
 import { COURSES } from "../course";
 import { Trophy, ArrowRight, X, Sparkles, PartyPopper } from "lucide-react";
-import { debug } from "../lib/log";
+import { readBucket, removeBucket, writeBucket } from "../lib/store";
 
-// Read a course's saved completion from its own localStorage bucket so we can
-// reason about the whole journey (not just the active course).
+function celebrationShown(key) {
+  const value = readBucket(key, null);
+  // Older builds stored the flag as the string "1"; new ones store true.
+  return value === true || value === "1" || value === 1;
+}
+
+// Read a course's saved completion from its own store bucket so we can reason
+// about the whole journey (not just the active course).
 function courseCompletion(course) {
-  try {
-    const data = JSON.parse(localStorage.getItem(course.storageKey)) || {};
-    const prog = data.progress || {};
-    const done = course.LESSONS.filter((l) => prog[l.id]?.done).length;
-    return { done, total: course.LESSONS.length };
-  } catch (e) {
-    debug("CourseComplete: could not read course completion", e);
-    return { done: 0, total: course.LESSONS.length };
-  }
+  const data = readBucket(course.storageKey, {}) || {};
+  const prog = data.progress || {};
+  const done = course.LESSONS.filter((l) => prog[l.id]?.done).length;
+  return { done, total: course.LESSONS.length };
 }
 
 // A small, dismissible celebration shown once when a learner completes every
@@ -28,11 +29,13 @@ function courseCompletion(course) {
 export function CourseComplete({ nextCourse, onSwitchCourse }) {
   const { progress } = useApp();
   const { id, LESSONS, name, storageKey } = useCourse();
-  const [open, setOpen] = useState(false);
 
   const doneCount = LESSONS.filter((l) => progress[l.id]?.done).length;
   const allDone = LESSONS.length > 0 && doneCount === LESSONS.length;
   const celebratedKey = `${storageKey}__celebrated`;
+  // A course that is already complete on load still gets one celebration.
+  const [open, setOpen] = useState(() => allDone && !celebrationShown(celebratedKey));
+  const [lastAllDone, setLastAllDone] = useState(allDone);
 
   // Where should the "continue" button point?
   const firstIncomplete = COURSES.find((c) => {
@@ -43,29 +46,20 @@ export function CourseComplete({ nextCourse, onSwitchCourse }) {
   const target = nextCourse || firstIncomplete;
   const allComplete = !target; // final course done AND nothing left unfinished
 
+  // Adjust state during render when progress crosses 100%: the completion is
+  // driven by progress updates in a parent, so there is no event to handle
+  // here. React re-renders immediately instead of committing the stale tree.
+  if (allDone !== lastAllDone) {
+    setLastAllDone(allDone);
+    if (allDone && !celebrationShown(celebratedKey)) setOpen(true);
+  }
+
   useEffect(() => {
     if (allDone) {
-      let already = false;
-      try {
-        already = localStorage.getItem(celebratedKey) === "1";
-      } catch (e) {
-        debug("CourseComplete: could not read celebrated flag", e);
-      }
-      if (!already) {
-        setOpen(true);
-        try {
-          localStorage.setItem(celebratedKey, "1");
-        } catch (e) {
-          debug("CourseComplete: could not persist celebrated flag", e);
-        }
-      }
+      writeBucket(celebratedKey, true);
     } else {
       // Progress dropped below 100% (e.g. reset) — allow the celebration again.
-      try {
-        localStorage.removeItem(celebratedKey);
-      } catch (e) {
-        debug("CourseComplete: could not clear celebrated flag", e);
-      }
+      removeBucket(celebratedKey);
     }
   }, [allDone, celebratedKey]);
 

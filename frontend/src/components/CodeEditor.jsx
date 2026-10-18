@@ -31,7 +31,7 @@ const CLOJURE_CORE = [
 ].map((label) => ({ label, type: "keyword" }));
 
 function clojureCompletions(context) {
-  const word = context.matchBefore(/[\w\-!?<>=*+.'\/]+/);
+  const word = context.matchBefore(/[\w\-!?<>=*+.'/]+/);
   if (!word || (word.from === word.to && !context.explicit)) return null;
   return completeFromList(CLOJURE_CORE)(context);
 }
@@ -111,8 +111,14 @@ export function CodeEditor({ value, onChange, onRun, themeVars, dark, fontSize =
   const viewRef = useRef(null);
   const onChangeRef = useRef(onChange);
   const onRunRef = useRef(onRun);
-  onChangeRef.current = onChange;
-  onRunRef.current = onRun;
+
+  // Keep the latest callbacks for the editor's keymap and change listener.
+  // The editor is created once per theme/size change, so it must not capture
+  // a stale `onChange`/`onRun` from that render.
+  useEffect(() => {
+    onChangeRef.current = onChange;
+    onRunRef.current = onRun;
+  }, [onChange, onRun]);
 
   useEffect(() => {
     if (!parentRef.current) return;
@@ -181,7 +187,6 @@ export function CodeEditor({ value, onChange, onRun, themeVars, dark, fontSize =
     if (value !== undefined && value !== current) {
       view.dispatch({ changes: { from: 0, to: current.length, insert: value || "" } });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
   return <div ref={parentRef} className="cm-host" />;

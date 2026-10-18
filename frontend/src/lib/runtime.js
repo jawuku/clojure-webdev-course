@@ -64,11 +64,14 @@ function authError() {
       };
 }
 
-async function api(path, { method = "POST", body } = {}) {
+async function api(
+  path,
+  { method = "POST", body, timeoutMs = API_TIMEOUT_MS, keepalive = false } = {}
+) {
   if (!token) throw new Error(authError().error);
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(path, {
       method,
@@ -78,6 +81,7 @@ async function api(path, { method = "POST", body } = {}) {
       },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: controller.signal,
+      keepalive,
     });
     const data = await response.json().catch(() => null);
     if (!response.ok) {
@@ -98,6 +102,14 @@ async function api(path, { method = "POST", body } = {}) {
 
 function describe(error) {
   return (error && (error.message || String(error))) || "Unknown runtime error";
+}
+
+/**
+ * Transport for other local endpoints that share the launch token (the state
+ * store). Components should keep using the helpers below.
+ */
+export function runtimeRequest(path, options) {
+  return api(path, options);
 }
 
 // ---------------------------------------------------------------------------
@@ -143,6 +155,26 @@ export function waitForRuntime(timeoutMs = 20_000) {
   return readyPromise;
 }
 
+/**
+ * Restart the evaluation worker. Every definition made in the REPL and any
+ * other state inside the running Clojure process is dropped; the server keeps
+ * running, so the page does not need to reload. Never throws.
+ */
+export async function resetRuntime() {
+  try {
+    const data = await api("/api/reset", { body: {} });
+    if (data.ok === true) ready = true;
+    return {
+      ok: data.ok === true,
+      pid: data.pid ?? null,
+      runtime: data.runtime || null,
+      error: data.ok === true ? null : data.error || "The runtime did not restart.",
+    };
+  } catch (error) {
+    return { ok: false, pid: null, runtime: null, error: describe(error) };
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Per-course namespaces
 // ---------------------------------------------------------------------------
@@ -152,12 +184,12 @@ export function waitForRuntime(timeoutMs = 20_000) {
 // request; it never infers the course from the UI.
 let currentNs = "user";
 
-const VALID_NS_SYMBOL = /^[A-Za-z_][A-Za-z0-9_.!?+*\/<>=#-]*$/;
+const VALID_NS_SYMBOL = /^[A-Za-z_][A-Za-z0-9_.!?+*/<>=#-]*$/;
 
 function sanitizeNs(ns) {
   if (typeof ns === "string" && VALID_NS_SYMBOL.test(ns)) return ns;
   const slug = String(ns ?? "")
-    .replace(/[^A-Za-z0-9_.!?+*\/<>=#-]/g, "")
+    .replace(/[^A-Za-z0-9_.!?+*/<>=#-]/g, "")
     .replace(/^[^A-Za-z_]*/, "")
     .slice(0, 40);
   const clean = slug ? `course-${slug}` : "course-unknown";

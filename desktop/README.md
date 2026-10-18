@@ -42,7 +42,36 @@ The token is random per launch and lives in the URL fragment, so it is not sent
 to the server in a request line or a referrer. Browser code sends it as
 `X-Parens-Token`.
 
-Options: `--port N`, `--token T` (tests only), `--timeout-ms N`, `--no-open`.
+Options: `--port N`, `--token T` (tests only), `--timeout-ms N`, `--no-open`,
+`--no-app-window`, `--state-dir DIR` (default: the platform app-data directory).
+
+## Launcher
+
+- **One instance per state directory.** The launcher holds an OS file lock on
+  `<state-dir>/instance.lock` and publishes `<state-dir>/instance.url`
+  (owner-only on POSIX) once the server is listening. A second launch cannot
+  take the lock: it reads the URL, opens the running UI, prints
+  `Parens is already running.`, and exits 0. The OS releases the lock when the
+  process exits, so a crash never leaves a stale lock — the file itself is kept
+  on purpose.
+- **Readiness.** `run-server` is synchronous, and the launcher additionally
+  polls `GET /api/health` (5s budget) before opening the UI, so the first page
+  load never races the listener.
+- **App window.** A Chromium-family browser (Chrome, Chromium, Edge, Brave) is
+  launched with `--app=<url>`, an isolated
+  `--user-data-dir=<state-dir>/browser-profile`, `--no-first-run` and
+  `--no-default-browser-check`. This keeps the user's normal browser profile
+  untouched and works even when a browser is already running. Detection looks
+  in PATH on Linux, `/Applications` on macOS, and the usual Program Files /
+  LOCALAPPDATA paths on Windows. `PARENS_BROWSER=/path/to/browser` overrides
+  detection; `--no-app-window` (or `--no-open`) skips the window.
+- **Fallback.** With no Chromium-family browser the URL opens through
+  `Desktop.browse` or the platform opener (`open`, `rundll32`, `xdg-open`).
+- **Ports.** `--port N` requests a fixed loopback port; if it is taken the
+  launcher explains the conflict and suggests omitting `--port`. The default
+  picks a free port.
+- **Shutdown.** The shutdown hook stops the HTTP server, kills the worker JVM,
+  removes `instance.url`, and releases the lock.
 
 ## API
 
@@ -58,6 +87,8 @@ All `/api/*` routes except `/api/health` require `X-Parens-Token`.
 | POST | `/api/exercise` | `{code, tests:[string]}` | `{ok, passed, results:[{test,ok,detail}], runError, output, ms}` |
 | POST | `/api/preview/session` | — | `{ok}` + a `parens-preview` `Set-Cookie` for the live capstone |
 | POST | `/api/reset` | — | restarts the worker |
+| GET | `/api/state` | — | `{ok, state:{bucket → value}}` from `state.edn` |
+| PUT | `/api/state` | `{key, value}` | `{ok, key, buckets}` — merges one bucket; `value: null` deletes it |
 
 `value` is `pr-str` of the last form. Code is read and evaluated one top-level form at a
 time (like a REPL), so `defprotocol`/`defrecord` definitions are visible to later forms.
@@ -101,6 +132,30 @@ The evaluator is **not a sandbox**. Learner code is trusted local code: it can
 read files and open sockets. The child process protects the app from hangs and
 `System/exit`, not from a determined user.
 
+## State
+
+Learner state lives in one EDN file in the platform app-data directory:
+
+| OS | Path |
+| --- | --- |
+| Linux | `$XDG_CONFIG_HOME/parens/state.edn` (default `~/.config/parens/state.edn`) |
+| macOS | `~/Library/Application Support/Parens/state.edn` |
+| Windows | `%APPDATA%\Parens\state.edn` |
+
+It is `{:version 1 :buckets {"parens_clojure_v1" {...} "parens_active_course_v1"
+"clojure" ...}}`, one bucket per key the UI has always used. `PUT /api/state`
+merges a bucket; a `null` value deletes it. Writes go to a temp file in the same
+directory and are moved into place with `ATOMIC_MOVE` (falling back to a plain
+replace on filesystems that cannot), so a crash never leaves a half-written
+file. A corrupt file is moved aside as `state.edn.corrupt-<timestamp>`.
+
+The UI keeps a `localStorage` mirror for first paint (`public/theme-init.js`) and
+for running without a server; `frontend/src/lib/store.js` hydrates the mirror
+from the file before React renders, uploads old browser buckets on the first
+launch after upgrading, and falls back to the mirror if `GET /api/state` fails.
+Use `--state-dir` to keep tests and the packaged checkers away from the real
+profile.
+
 ## Worker lifecycle
 
 - One warm child JVM per app, EDN over stdin/stdout, serialized requests.
@@ -120,9 +175,10 @@ additional `jpackage` launcher) is kept as a fallback.
 ## Verify
 
 ```bash
-lein test                       # token/Host/Origin + worker recovery
+lein test                       # token/Host/Origin, worker recovery, state store, launcher
 lein uberjar
 node scripts/phase0_check.mjs --json benchmarks/results.json
+node scripts/offline_smoke.mjs --json benchmarks/offline-smoke.json
 ```
 
 `lein test` covers the security boundary at the handler level (`test/parens/api_test.clj`)
@@ -135,7 +191,16 @@ semantics (ratios, `Math/`, Long, numeric equality, divide-by-zero), runs the
 exercise path, measures cold start and eval latency, proves timeout and
 `System/exit` recovery, and verifies that no worker JVM survives shutdown. The
 rendered UI (Hiccup previews, the capstone Ring app, exercises) is covered by
-`frontend/scripts/smoke.mjs`.
+`frontend/scripts/smoke.mjs`, which CI runs on Linux, macOS and Windows against the
+shared uberjar. The human install pass, signing secrets and release notes are in
+[`docs/RELEASE_CHECKLIST.md`](../docs/RELEASE_CHECKLIST.md).
+
+`node scripts/offline_smoke.mjs` is the packaged-app offline check. It starts a
+package (or the uberjar), crawls every asset the shipped HTML and CSS reference,
+and fails if one is missing, empty, or points at another origin. It then evaluates
+`(+ 1 2)` through the packaged worker JVM and checks that quitting leaves no orphan
+worker. Pass `--command /path/to/launcher` to test an installed app image, `.deb`,
+`.rpm`, `.dmg`, `.msi`, or `.exe`; CI runs it on every packaged artifact.
 
 ## Linux app image
 
@@ -148,6 +213,9 @@ bash scripts/build_appimage.sh
 node scripts/phase0_check.mjs \
   --command "$(pwd)/target/jpackage/ParensPhase0/bin/ParensPhase0" \
   --json benchmarks/jpackage-results.json
+node scripts/offline_smoke.mjs \
+  --command "$(pwd)/target/jpackage/ParensPhase0/bin/ParensPhase0" \
+  --json benchmarks/jpackage-offline.json
 ```
 
 The app image is written to `target/jpackage/ParensPhase0` (~182 MB with the
