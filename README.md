@@ -142,9 +142,10 @@ Ubuntu, macOS and Windows against one shared uberjar.
 or the uberjar, crawls every asset the shipped HTML/CSS references, and fails if one is
 missing, empty, or points at another origin. It then evaluates Clojure through the
 packaged worker and checks that quitting leaves no orphan JVM. This is the offline gate
-CI runs against the `.deb`, `.rpm`, app images, `.dmg`, `.msi`, and `.exe`;
-[docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) covers the human install pass,
-signing secrets, and release notes.
+CI runs against the `.deb`, `.rpm`, app images, `.dmg`, `.msi`, and `.exe`. The Linux
+packages are published with a `SHA256SUMS` file, plus a GPG signature over it when
+`desktop-release.yml` has a signing key; [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md)
+covers the human install pass, signing secrets, and release notes.
 
 The topbar's restart control restarts the evaluation worker (`POST /api/reset`): REPL
 definitions are dropped, the page keeps running, and lesson progress is kept.

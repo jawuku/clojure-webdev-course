@@ -16,24 +16,36 @@ Push the release commit and wait for both workflows:
   bundle check, offline check, content audit, semantics guard, and the browser
   smoke test on Ubuntu, macOS and Windows.
 
-All of these must be green before tagging. The signing jobs in
-`.github/workflows/desktop-release.yml` need these repository secrets:
+All of these must be green before tagging. The Linux `.deb` and `.rpm` artifacts
+are `target/dist` directories holding the package, `SHA256SUMS`, and — when
+`.github/workflows/desktop-release.yml` has a GPG key — `SHA256SUMS.asc`.
+
+The macOS and Windows signing jobs in `desktop-release.yml` need these
+repository secrets:
 
 | Secret | Used for |
 | --- | --- |
-| `MACOS_CERTIFICATE_P12`, `MACOS_CERTIFICATE_PASSWORD`, `MACOS_KEYCHAIN_PASSWORD` | Developer ID signing |
-| `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD` | notarization |
-| `WINDOWS_CERTIFICATE_PFX`, `WINDOWS_CERTIFICATE_PASSWORD` | Authenticode signing |
+| `APPLE_SIGNING_IDENTITY`, `APPLE_CERT_P12_BASE64`, `APPLE_CERT_PASSWORD` | Developer ID signing |
+| `APPLE_NOTARY_KEY_P8_BASE64`, `APPLE_NOTARY_KEY_ID`, `APPLE_NOTARY_KEY_ISSUER` | notarization |
+| `WINDOWS_CERT_PFX_BASE64`, `WINDOWS_CERT_PASSWORD` | Authenticode signing |
+| `LINUX_GPG_PRIVATE_KEY_BASE64` | optional — GPG signature over the Linux `SHA256SUMS` |
+| `LINUX_GPG_KEY_ID`, `LINUX_GPG_PASSPHRASE` | optional — key selection and passphrase |
 
 Without them, builds are unsigned: macOS Gatekeeper and Windows SmartScreen
-will warn on first launch. That is acceptable for a development build, not for
-a public release.
+will warn on first launch, and the Linux packages ship an unsigned
+`SHA256SUMS`. That is acceptable for a development build, not for a public
+release.
 
 ## 2. Manual install pass (per OS)
 
 Use a machine or VM that has never had Parens installed. For each target:
 
-1. Download the installer from the workflow run and verify its checksum.
+1. Download the installer from the workflow run and verify it before installing.
+   For Linux, take the whole artifact directory (package, `SHA256SUMS`, and
+   `SHA256SUMS.asc` when signed) and run `sha256sum -c SHA256SUMS`; with a
+   signature, first import the release key and run
+   `gpg --verify SHA256SUMS.asc SHA256SUMS`. The macOS and Windows artifacts
+   publish no checksum file yet, so this step cannot be completed for them.
 2. Install it the normal way (double-click `.dmg`/`.msi`/`.exe`, or
    `sudo apt install ./parens_*.deb` / `sudo dnf install ./parens-*.rpm`).
 3. Launch from the desktop menu or applications folder:
@@ -66,7 +78,10 @@ silicon and Intel if both are built), and Windows (`.msi` and `.exe`).
 ## 3. Known limitations to state in the release notes
 
 - No code-signing certificates in CI means unsigned builds unless the secrets
-  above are configured.
+  above are configured. Only the Linux packages publish a checksum, and its
+  GPG signature is optional: without `LINUX_GPG_PRIVATE_KEY_BASE64`,
+  `SHA256SUMS` proves the download is intact, not who built it. macOS and
+  Windows installers have no published checksum.
 - The evaluator is a child JVM with a timeout and a temp working directory, not
   a security sandbox; it is intended for the learner's own code on their own
   machine.

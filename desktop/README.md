@@ -265,6 +265,55 @@ Fedora 43 x86_64; see [`docs/PHASE0_RESULTS.md`](../docs/PHASE0_RESULTS.md). The
 `fedora-rpm` job in `.github/workflows/desktop-ci.yml` repeats the build, tests, and
 install check in a `fedora:43` container on GitHub Actions; it passes 31/31.
 
+## Linux checksums and signatures
+
+Every published Linux package ships with `SHA256SUMS`, and optionally a GPG
+signature over that file. One command produces both:
+
+```bash
+bash scripts/build_deb.sh                       # or scripts/build_rpm.sh
+bash scripts/publish_linux.sh target/deb/*.deb
+```
+
+`publish_linux.sh` copies the packages into `target/dist`, writes a sorted
+`SHA256SUMS` with bare file names, and verifies it against the copies before
+exiting. `scripts/checksums.sh FILE...` is that step on its own (`--out DIR`
+changes the destination). The `.deb` and `.rpm` jobs in CI run the publisher, so
+the `parens-deb` and `parens-rpm` artifacts carry the package and its checksum.
+
+Verification needs no key:
+
+```bash
+cd target/dist
+sha256sum -c SHA256SUMS        # macOS: shasum -a 256 -c SHA256SUMS
+```
+
+GPG signing is optional and off by default. Give the armored secret key in
+`LINUX_GPG_PRIVATE_KEY_BASE64`; `LINUX_GPG_KEY_ID` chooses a key when the block
+holds several, and `LINUX_GPG_PASSPHRASE` unlocks a protected one:
+
+```bash
+export LINUX_GPG_PRIVATE_KEY_BASE64="$(base64 -w0 parens-signing-key.asc)"
+export LINUX_GPG_PASSPHRASE="…"                 # omit for an unprotected key
+bash scripts/publish_linux.sh target/deb/*.deb
+```
+
+`scripts/sign_linux.sh` imports the key into a throwaway `GNUPGHOME` (never the
+caller's keyring), re-hashes the packages, writes the armored detached
+signature `SHA256SUMS.asc`, verifies it against the imported key, and prints the
+key fingerprint. The signature covers the checksum file, not each package, so a
+user checks the packages with `sha256sum -c` and the file's origin with:
+
+```bash
+gpg --import parens-signing-key.asc   # the release key, published with its fingerprint
+sha256sum -c SHA256SUMS
+gpg --verify SHA256SUMS.asc SHA256SUMS
+```
+
+Without `LINUX_GPG_PRIVATE_KEY_BASE64`, `publish_linux.sh` publishes the
+checksums unsigned and says so. `desktop-release.yml` passes the secret to its
+Linux jobs when the repository has one; those jobs never fail for a missing key.
+
 ## macOS .dmg
 
 ```bash
@@ -321,6 +370,9 @@ PRs never need certificates. The release workflow runs on `workflow_dispatch` or
 | `APPLE_NOTARY_KEY_ISSUER` | App Store Connect issuer UUID |
 | `WINDOWS_CERT_PFX_BASE64` | base64 of the Authenticode code-signing `.pfx` |
 | `WINDOWS_CERT_PASSWORD` | password for that `.pfx` |
+| `LINUX_GPG_PRIVATE_KEY_BASE64` | optional — base64 of the armored GPG secret key that signs `SHA256SUMS` |
+| `LINUX_GPG_KEY_ID` | optional — key to sign with when the block holds several |
+| `LINUX_GPG_PASSPHRASE` | optional — passphrase for that key |
 
 The workflow runs this check first; it also works locally and names every missing
 variable:
@@ -329,6 +381,9 @@ variable:
 bash scripts/require_release_secrets.sh macos
 bash scripts/require_release_secrets.sh windows
 ```
+
+Linux has no mandatory secrets: `require_release_secrets.sh` only covers the two
+modes above, and the Linux jobs publish checksums with or without a key.
 
 macOS signing imports the certificate into a throwaway keychain, signs every Mach-O
 file in the bundle (the app launcher, the worker launcher, and the bundled
@@ -368,8 +423,10 @@ Ubuntu 26.04, macOS (arm64), and Windows (x64), plus the `.deb` and `.rpm`; ever
 runs the same 31-check suite. The macOS job also builds a `.dmg`, installs the app
 into `/Applications`, and re-runs the checks against that copy. The Windows job
 builds an `.msi` and an `.exe`, installs each in turn, checks the installed launcher
-against the same 31 checks, and uninstalls it. Those artifacts are unsigned;
-`desktop-release.yml` produces the signed and notarized ones.
+against the same 31 checks, and uninstalls it. Every Linux artifact ships a
+`SHA256SUMS`; the macOS and Windows app images and installers are unsigned here,
+and `desktop-release.yml` produces the signed and notarized ones plus the
+GPG-signed Linux checksums when the key is configured.
 
 ## Known limitations
 
@@ -380,6 +437,10 @@ against the same 31 checks, and uninstalls it. Those artifacts are unsigned;
 - JDK 25 LTS is pinned in `project.clj`, `scripts/run.sh`, and the app-image
   build. Measured on GraalVM CE 25.0.2 (NixOS) and Temurin 25.0.4.1 (Ubuntu
   24.04 under `proot`, and all CI app images).
+- Linux GPG signing has been exercised with throwaway keys, locally, only; no
+  release key exists in the repository. Without
+  `LINUX_GPG_PRIVATE_KEY_BASE64`, `SHA256SUMS` proves integrity, not who built
+  the package.
 - No true sandbox; see above.
 - Timeout loses REPL/namespace state in the worker.
 - Direct writes to `System/out` (rather than `println`) can corrupt the worker

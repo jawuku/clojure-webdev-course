@@ -76,6 +76,12 @@ jobs:
       - name: Inspect package
         run: dpkg-deb -I target/deb/*.deb
 
+      # Every published build carries a checksum a user can verify before
+      # installing. publish_linux.sh also signs SHA256SUMS when a key is set,
+      # which pull-request CI (and contributor builds) do not have.
+      - name: Publish package with SHA256SUMS
+        run: bash scripts/publish_linux.sh target/deb/*.deb
+
       - name: Install package
         run: sudo dpkg -i target/deb/*.deb
 
@@ -102,7 +108,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: parens-deb
-          path: desktop/target/deb/*.deb
+          path: desktop/target/dist/*
           if-no-files-found: ignore
 
       - name: Upload .deb check results
@@ -158,6 +164,10 @@ jobs:
           rpm -qpi target/rpm/RPMS/*/*.rpm
           rpm -qpR target/rpm/RPMS/*/*.rpm
 
+      - name: Publish package with SHA256SUMS
+        working-directory: desktop
+        run: bash scripts/publish_linux.sh target/rpm/RPMS/*/*.rpm
+
       - name: Install package
         working-directory: desktop
         run: rpm -ivh target/rpm/RPMS/*/*.rpm
@@ -185,7 +195,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: parens-rpm
-          path: desktop/target/rpm/RPMS/*/*.rpm
+          path: desktop/target/dist/*
           if-no-files-found: ignore
 
       - name: Upload .rpm check results
@@ -195,6 +205,73 @@ jobs:
           name: rpm-results
           path: ${{ runner.temp }}/rpm-results.json
           if-no-files-found: ignore
+
+  linux-checksums:
+    name: Linux checksums + GPG signature
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install GPG
+        run: sudo apt-get update && sudo apt-get install -y gnupg
+
+      # Release signing uses the real key in desktop-release.yml. This job
+      # exercises the same path with a throwaway key on every pull request, so
+      # a broken publisher fails before a release does.
+      - name: Publish, sign and verify
+        run: |
+          set -euo pipefail
+
+          export GNUPGHOME="$(mktemp -d)"
+          trap 'rm -rf "$GNUPGHOME"' EXIT
+          chmod 0700 "$GNUPGHOME"
+          printf '%s\n' \
+            '%no-protection' \
+            'Key-Type: RSA' \
+            'Key-Length: 3072' \
+            'Name-Real: Parens CI' \
+            'Name-Email: ci@example.invalid' \
+            'Expire-Date: 1d' \
+            '%commit' > "$RUNNER_TEMP/key.batch"
+          gpg --batch --gen-key "$RUNNER_TEMP/key.batch"
+          gpg --batch --armor --export-secret-keys > "$RUNNER_TEMP/key.asc"
+          gpg --batch --armor --export > "$RUNNER_TEMP/key.pub.asc"
+
+          # The publisher only hashes whatever it is given; the package itself
+          # is built and installed by the deb/rpm jobs above.
+          mkdir -p "$RUNNER_TEMP/pkgs"
+          printf 'fake package\n' > "$RUNNER_TEMP/pkgs/parens_0.1.0_amd64.deb"
+
+          LINUX_GPG_PRIVATE_KEY_BASE64="$(base64 -w0 "$RUNNER_TEMP/key.asc")" \
+            bash scripts/publish_linux.sh "$RUNNER_TEMP/pkgs/parens_0.1.0_amd64.deb"
+
+          test -f target/dist/SHA256SUMS.asc
+          (cd target/dist && sha256sum -c SHA256SUMS)
+
+          # Verify the way a user does: a keyring holding only the public key.
+          VERIFY_HOME="$RUNNER_TEMP/verify-home"
+          mkdir -m 0700 -p "$VERIFY_HOME"
+          GNUPGHOME="$VERIFY_HOME" gpg --batch --import "$RUNNER_TEMP/key.pub.asc"
+          GNUPGHOME="$VERIFY_HOME" gpg --batch --verify \
+            target/dist/SHA256SUMS.asc target/dist/SHA256SUMS
+
+          # A package that no longer matches its checksum must be detected, and
+          # signing must refuse to attach a fresh signature to stale sums.
+          printf 'tampered\n' >> target/dist/parens_0.1.0_amd64.deb
+          if (cd target/dist && sha256sum -c SHA256SUMS >/dev/null 2>&1); then
+            echo "tampered package passed the checksum check" >&2
+            exit 1
+          fi
+          if LINUX_GPG_PRIVATE_KEY_BASE64="$(base64 -w0 "$RUNNER_TEMP/key.asc")" \
+            bash scripts/sign_linux.sh target/dist >/dev/null 2>&1; then
+            echo "signing accepted tampered packages" >&2
+            exit 1
+          fi
+          echo "Checksum and signature checks behaved as expected."
 
   app-image:
     name: Linux app-image (${{ matrix.os }})

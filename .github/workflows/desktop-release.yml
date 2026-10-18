@@ -4,6 +4,10 @@ name: Desktop release
 # no certificates and must stay green. This workflow runs manually or from a
 # `desktop-v*` tag and fails early, naming every missing secret, when the
 # signing credentials are not configured.
+#
+# The Linux jobs are the exception: GPG signing is optional there. Without
+# LINUX_GPG_PRIVATE_KEY_BASE64 they publish the package and its SHA256SUMS
+# unsigned rather than failing, because checksums are useful without a key.
 
 on:
   workflow_dispatch:
@@ -285,4 +289,107 @@ jobs:
           path: |
             ${{ runner.temp }}/signed-windows-results.json
             ${{ runner.temp }}/release-msi-results.json
+          if-no-files-found: ignore
+
+  linux-deb-release:
+    name: Linux .deb + SHA256SUMS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: desktop
+    env:
+      LINUX_GPG_PRIVATE_KEY_BASE64: ${{ secrets.LINUX_GPG_PRIVATE_KEY_BASE64 }}
+      LINUX_GPG_KEY_ID: ${{ secrets.LINUX_GPG_KEY_ID }}
+      LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Install Leiningen
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein \
+            -o "$RUNNER_TEMP/lein"
+          chmod +x "$RUNNER_TEMP/lein"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Install packaging prerequisites
+        run: sudo apt-get update && sudo apt-get install -y binutils gnupg
+
+      # Same build script CI validates by installing the package and running
+      # phase0_check.mjs / offline_smoke.mjs against it.
+      - name: Build .deb
+        run: bash scripts/build_deb.sh
+
+      - name: Inspect package
+        run: dpkg-deb -I target/deb/*.deb
+
+      - name: Publish package, checksums and optional signature
+        run: bash scripts/publish_linux.sh target/deb/*.deb
+
+      - name: Upload .deb release
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: parens-deb-release
+          path: desktop/target/dist/*
+          if-no-files-found: ignore
+
+  linux-rpm-release:
+    name: Linux .rpm + SHA256SUMS
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    container:
+      image: fedora:43
+    env:
+      LINUX_GPG_PRIVATE_KEY_BASE64: ${{ secrets.LINUX_GPG_PRIVATE_KEY_BASE64 }}
+      LINUX_GPG_KEY_ID: ${{ secrets.LINUX_GPG_KEY_ID }}
+      LINUX_GPG_PASSPHRASE: ${{ secrets.LINUX_GPG_PASSPHRASE }}
+    steps:
+      - name: Install container prerequisites
+        run: >-
+          dnf -y install git tar gzip xz curl findutils diffutils binutils
+          rpm-build gnupg2
+
+      - uses: actions/checkout@v7
+
+      - name: Install Temurin JDK 25
+        run: |
+          curl -fsSL "https://api.adoptium.net/v3/binary/latest/25/ga/linux/x64/jdk/hotspot/normal/eclipse" \
+            -o /tmp/jdk.tar.gz
+          mkdir -p /opt/jdk
+          tar -xzf /tmp/jdk.tar.gz -C /opt/jdk --strip-components=1
+          echo "JAVA_HOME=/opt/jdk" >> "$GITHUB_ENV"
+          echo "/opt/jdk/bin" >> "$GITHUB_PATH"
+
+      - name: Install Leiningen
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/technomancy/leiningen/stable/bin/lein \
+            -o /usr/local/bin/lein
+          chmod +x /usr/local/bin/lein
+
+      - name: Build .rpm
+        working-directory: desktop
+        run: bash scripts/build_rpm.sh
+
+      - name: Inspect package
+        working-directory: desktop
+        run: |
+          rpm -qpi target/rpm/RPMS/*/*.rpm
+          rpm -qpR target/rpm/RPMS/*/*.rpm
+
+      - name: Publish package, checksums and optional signature
+        working-directory: desktop
+        run: bash scripts/publish_linux.sh target/rpm/RPMS/*/*.rpm
+
+      - name: Upload .rpm release
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: parens-rpm-release
+          path: desktop/target/dist/*
           if-no-files-found: ignore
