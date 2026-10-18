@@ -5,19 +5,18 @@ import { webPart3 } from "../data/webPart3";
 import { webPart4 } from "../data/webPart4";
 import { WEB_CHEATSHEET } from "../data/webCheatsheet";
 
-// "Web Development with ClojureScript" — the follow-on course. It reuses the
-// exact same UI, themes, REPL, search and cheat sheet as the Clojure course.
-// ClojureScript/Reagent-specific snippets are being ported to the JVM UI
-// runtime; until then their live previews render as read-only examples.
+// "Web Development with Clojure" — the follow-on course. It reuses the exact
+// same UI, themes, REPL, search and cheat sheet as the Clojure course, and runs
+// entirely on the JVM: Ring handlers, Hiccup, HTMX and the live Ring capstone.
 const LESSONS = [...webPart1, ...webPart2, ...webPart3, ...webPart4];
 
 const REPL_WELCOME =
-  ';; Clojure REPL — running on the local JVM.\n;; Try a few expressions:\n(map inc [1 2 3])\n(->> (range 10) (filter even?) (reduce +))\n(clojure.string/upper-case "clojure")';
+  ';; Clojure REPL — running on the local JVM.\n;; Try a few web-shaped expressions:\n(hiccup.core/html [:h1 "Hello, web!"])\n(map inc [1 2 3])\n(clojure.string/upper-case "clojure")';
 
 export const webCourse = buildCourse({
   id: "webdev",
   name: "Hiccup",
-  tagline: "Web Dev with ClojureScript",
+  tagline: "Web Dev with Clojure (JVM)",
   brandMark: "</>",
   storageKey: "parens_webdev_v1",
   ns: "web",

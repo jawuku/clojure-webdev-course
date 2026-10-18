@@ -276,6 +276,11 @@
         response (request! {:op :eval :ns ns :code code})]
     (assoc response :ms (/ (double (- (System/nanoTime) t0)) 1e6))))
 
+(defn render-hiccup [ns code]
+  (let [t0 (System/nanoTime)
+        response (request! {:op :hiccup :ns ns :code code})]
+    (assoc response :ms (/ (double (- (System/nanoTime) t0)) 1e6))))
+
 (defn run-exercise [ns code tests]
   (let [t0 (System/nanoTime)
         response (request! {:op :exercise :ns ns :code code :tests tests})]

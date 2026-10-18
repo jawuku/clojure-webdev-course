@@ -17,7 +17,11 @@
   :license {:name "MIT"}
   :dependencies [[org.clojure/clojure "1.12.5"]
                  [http-kit/http-kit "2.8.0"]
-                 [cheshire/cheshire "5.13.0"]]
+                 [cheshire/cheshire "5.13.0"]
+                 ;; Course 2 renders its Hiccup previews through the real
+                 ;; library, in the worker JVM, so what learners see is what
+                 ;; hiccup.core/html actually produces.
+                 [hiccup/hiccup "1.0.5"]]
   :main parens.main
   :aot [parens.main parens.worker]
   :javac-options ["--release" "25"]

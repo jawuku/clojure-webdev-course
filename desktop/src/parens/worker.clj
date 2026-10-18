@@ -4,7 +4,8 @@
   for normal println/prn use."
   (:require [clojure.edn :as edn]
             [clojure.set :as set]
-            [clojure.string :as str])
+            [clojure.string :as str]
+            [hiccup.core :as hiccup])
   (:import [java.lang ProcessHandle])
   (:gen-class :main true))
 
@@ -103,6 +104,14 @@
            :results []
            :runError (clean-error t)})))))
 
+(defn- render-hiccup [ns-name code]
+  ;; The course shows the HTML hiccup.core/html really produces, rendered from
+  ;; the last form's value (so a snippet may define helpers first).
+  (let [{:keys [result error output]} (capture #(hiccup/html (eval-in ns-name code)))]
+    (if error
+      {:ok false :html nil :output output :error (clean-error error)}
+      {:ok true :html result :output output :error nil})))
+
 (defn- exercise [code tests]
   (let [{:keys [result error output]} (capture #(run-exercise code tests))]
     (if error
@@ -119,6 +128,9 @@
 
     :eval
     (eval-code (or ns "user") (str code))
+
+    :hiccup
+    (render-hiccup (or ns "user") (str code))
 
     :exercise
     (exercise (str code) (vec (or tests [])))

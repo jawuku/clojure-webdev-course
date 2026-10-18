@@ -1,75 +1,71 @@
-// Quick reference for the Web Development course. Every example is runnable in
-// the in-browser ClojureScript runtime (click Run). Hiccup examples return the
-// data that would be rendered; interop examples call real JavaScript.
+// Quick reference for Web Development with Clojure. Every example runs on the
+// local JVM (click Run); Hiccup examples return the HTML hiccup.core/html
+// produces, and JSON examples use the same library a Ring app would.
 
 export const WEB_CHEATSHEET = [
   {
+    group: "Ring — requests",
+    items: [
+      { name: "request map", desc: "An HTTP request arrives as plain Clojure data.", example: "(def request {:request-method :get :uri \"/todos\" :headers {\"accept\" \"text/html\"}})\n[(:request-method request) (:uri request)]" },
+      { name: ":uri", desc: "The requested path.", example: "(:uri {:uri \"/todos/42\"})" },
+      { name: ":headers", desc: "Header names are lower-case strings.", example: "(get-in {:headers {\"accept\" \"text/html\"}} [:headers \"accept\"])" },
+      { name: ":query-string", desc: "The raw query string; middleware parses it into :params.", example: "(:query-string {:query-string \"q=clojure&page=2\"})" },
+      { name: "path params", desc: "A router adds :path-params to the request map.", example: "(get-in {:path-params {:id 42}} [:path-params :id])" },
+    ],
+  },
+  {
+    group: "Ring — responses",
+    items: [
+      { name: "response map", desc: "status, headers and body.", example: "{:status 200 :headers {\"content-type\" \"text/html; charset=utf-8\"} :body \"<h1>Hi</h1>\"}" },
+      { name: "handler", desc: "A function from request map to response map.", example: "((fn [_request] {:status 200 :headers {} :body \"Hello\"}) {:uri \"/\"})" },
+      { name: "status by path", desc: "Choose the response with ordinary Clojure.", example: "(let [request {:uri \"/nope\"}]\n  (if (= \"/\" (:uri request)) 200 404))" },
+      { name: "content types", desc: "Tell the browser what the body is.", example: "[\"text/html; charset=utf-8\" \"text/plain; charset=utf-8\" \"application/json; charset=utf-8\"]" },
+    ],
+  },
+  {
+    group: "Middleware",
+    items: [
+      { name: "middleware shape", desc: "Handler in, handler out.", example: "((fn [handler]\n   (fn [request]\n     (update (handler request) :headers assoc \"x-flag\" \"on\")))\n (fn [_] {:status 200 :headers {} :body \"Hi\"}))" },
+      { name: "adding a header", desc: "Wrap a response without touching the handler.", example: "((fn [request] (assoc-in (request {}) [:headers \"x-flag\"] \"on\"))\n (fn [_] {:status 200 :headers {} :body \"Hi\"}))" },
+      { name: "auth gate", desc: "Return early when a request is not allowed.", example: "(let [request {:headers {}}]\n  (if (= \"secret\" (get-in request [:headers \"x-token\"]))\n    {:status 200 :body \"secret data\"}\n    {:status 401 :body \"Unauthorized\"}))" },
+    ],
+  },
+  {
     group: "Hiccup — HTML as data",
     items: [
-      { name: "[:tag …]", desc: "An element: tag keyword then children.", example: "[:h1 \"Title\"]" },
-      { name: "attributes map", desc: "A map right after the tag sets attributes.", example: "[:a {:href \"/home\"} \"Home\"]" },
-      { name: "inline :style", desc: "Styles are a map of CSS properties.", example: "[:p {:style {:color \"red\"}} \"Hi\"]" },
-      { name: ":tag.class#id", desc: "Shorthand for class and id.", example: "[:div.card#main \"content\"]" },
-      { name: "children from data", desc: "Generate children with for / into.", example: "(into [:ul] (for [x [1 2 3]] [:li x]))" },
-      { name: "^{:key …}", desc: "Unique key for each item in a list.", example: "(for [x [:a :b]] ^{:key x} [:li x])" },
+      { name: "element", desc: "Tag keyword, then children.", example: "(hiccup.core/html [:h1 \"Title\"])" },
+      { name: "attributes map", desc: "A map right after the tag sets attributes.", example: "(hiccup.core/html [:a {:href \"/home\"} \"Home\"])" },
+      { name: "inline style", desc: "The style attribute is a CSS string (not a map).", example: "(hiccup.core/html [:p {:style \"color: #7e9cd8;\"} \"Hi\"])" },
+      { name: "children from data", desc: "Generate children with for.", example: "(hiccup.core/html [:ul (for [x [1 2 3]] [:li x])])" },
+      { name: "escaping", desc: "hiccup.core/h escapes text for HTML.", example: "(hiccup.core/html [:p (hiccup.core/h \"1 < 2 & 3 > 2\")])" },      { name: "fragment", desc: "Pass several elements to get one HTML string.", example: "(hiccup.core/html [:h2 \"Title\"] [:p \"Body\"]) " },
     ],
   },
   {
-    group: "Reagent patterns",
+    group: "HTMX attributes",
     items: [
-      { name: "component", desc: "A function that returns Hiccup.", example: "((fn greeting [] [:h2 \"Hi\"]))" },
-      { name: "render a component", desc: "Put it in a vector like a tag.", example: ";; [logo] is just data here — in a real Reagent app this renders the component.\n(let [logo (fn [] [:b \"</>\"])] [logo])" },
-      { name: "props", desc: "Pass data as function arguments.", example: "((fn badge [t] [:span t]) \"New\")" },
-      { name: "props as a map", desc: "Destructure a props map.", example: "((fn [{:keys [name]}] [:p name]) {:name \"Ada\"})" },
+      { name: "hx-post + target + swap", desc: "Post, and insert the response before the target's children.", example: "(hiccup.core/html [:button {:hx-post \"/todos\" :hx-target \"#todos\" :hx-swap \"beforeend\"} \"Add\"])" },
+      { name: "hx-get + trigger", desc: "Fetch as the user types, after a short pause.", example: "(hiccup.core/html [:input {:type \"search\" :name \"q\" :hx-get \"/search\" :hx-target \"#results\" :hx-trigger \"keyup changed delay:300ms\"}])" },
+      { name: "hx-swap values", desc: "innerHTML (default), outerHTML, beforeend, afterbegin, delete.", example: "[\"innerHTML\" \"outerHTML\" \"beforeend\" \"afterbegin\" \"delete\"]" },
+      { name: "fragment response", desc: "htmx swaps whatever HTML the handler returns.", example: "{:status 200 :headers {\"content-type\" \"text/html; charset=utf-8\"} :body \"<li>Milk</li>\"}" },
     ],
   },
   {
-    group: "State (reactive atoms)",
+    group: "Server state",
     items: [
-      { name: "atom", desc: "A container for changing state (r/atom in Reagent).", example: "(deref (atom 42))" },
-      { name: "deref / @", desc: "Read the current value.", example: "(let [a (atom 5)] @a)" },
-      { name: "swap!", desc: "Update via a function; re-renders the UI.", example: "(let [a (atom 0)] (swap! a inc) @a)" },
-      { name: "reset!", desc: "Replace the value outright.", example: "(let [a (atom 0)] (reset! a 99) @a)" },
-      { name: "swap! + conj", desc: "Add to a collection in state.", example: "(let [a (atom [1 2])] (swap! a conj 3) @a)" },
+      { name: "atom", desc: "State that lives on the server for the app's lifetime.", example: "(deref (atom {:todos []}))" },
+      { name: "swap!", desc: "Change state; the next request renders the new value.", example: "(let [todos (atom [])]\n  (swap! todos conj {:text \"Milk\" :done false})\n  @todos)" },
+      { name: "toggle a map", desc: "Update one todo immutably.", example: "(update {:id 1 :done false} :done not)" },
+      { name: "filter done", desc: "Keywords work as predicates.", example: "(count (filter :done [{:done true} {:done false}]))" },
     ],
   },
   {
-    group: "Events & forms",
+    group: "Routing & JSON",
     items: [
-      { name: ":on-click  :on-change  :on-submit", desc: "Event attributes — their value is a function run when the event fires.", example: "[:button {:on-click #(println \"clicked!\")} \"Go\"]" },
-      { name: "controlled input", desc: ":value from state + :on-change writes back — UI is a function of state.", example: "(let [text (atom \"\")] [:input {:value @text :on-change #(reset! text (.. % -target -value))}])" },
-      { name: "(.. e -target -value)", desc: "Read what the user typed from the event (example simulates the event as a map — real DOM events use (.. e -target -value)).", example: "(get-in {:target {:value \"hi\"}} [:target :value])" },
-    ],
-  },
-  {
-    group: "JavaScript interop",
-    items: [
-      { name: "js/…", desc: "Reach a global JS object.", example: "(js/Math.max 3 9 2)" },
-      { name: ".method", desc: "Call a method on an object.", example: "(.toUpperCase \"cljs\")" },
-      { name: ".-property", desc: "Read a property.", example: "(.-length \"clojure\")" },
-      { name: "js/parseInt", desc: "Use any built-in JS function.", example: "(js/parseInt \"2026px\" 10)" },
-      { name: "clj->js", desc: "Convert Clojure data to a JS object.", example: ";; clj->js returns a real JavaScript object — ClojureScript prints those\n;; with a #js prefix, so you'll see #js {...}. Convert it back with js->clj\n;; (next entry) to inspect the data as plain Clojure:\n(clj->js {:a 1 :b [2 3]})" },
-      { name: "js->clj", desc: "Convert JS data back to Clojure.", example: "(js->clj (clj->js {:a 1}) :keywordize-keys true)" },
-    ],
-  },
-  {
-    group: "Text helpers",
-    items: [
-      { name: "str/includes?", desc: "Does a string contain another?", example: "(str/includes? \"hello\" \"ell\")" },
-      { name: "str/upper-case", desc: "Uppercase a string.", example: "(str/upper-case \"hi there\")" },
-    ],
-  },
-  {
-    group: "Shaping data for the UI",
-    items: [
-      { name: "map", desc: "Transform each element.", example: "(map inc [1 2 3])" },
-      { name: "filter", desc: "Keep matching elements.", example: "(filter :done [{:done true} {:done false}])" },
-      { name: "for", desc: "Build a sequence (list rows).", example: "(for [x (range 3)] [:li x])" },
-      { name: "map-indexed", desc: "Like map, but hands each element AND its index.", example: "(map-indexed vector [\"a\" \"b\"])" },
-      { name: "->> (thread-last)", desc: "Pipe value into the LAST argument — data pipelines.", example: "(->> [1 2 3] (map inc) (reduce +))" },
-      { name: "mapv", desc: "Like map, but returns a vector.", example: "(mapv #(update % :n inc) [{:n 1} {:n 2}])" },
-      { name: "remove", desc: "Drop matching elements (e.g. delete).", example: "(vec (remove #(= % 2) [1 2 3]))" },
-      { name: "update / assoc", desc: "Change a map immutably.", example: "(update {:done false} :done not)" },
+      { name: "route table", desc: "Paths as data, each mapped to handlers.", example: "[ [\"/\" {:get :home}] [\"/todos\" {:get :todos}] [\"/todos/:id\" {:get :todo}] ]" },
+      { name: "match a path", desc: "The router does this for you; the idea is a lookup.", example: "(some (fn [[path handler]] (when (= path \"/todos\") handler))\n      [[\"/\" :home] [\"/todos\" :todos]])" },
+      { name: "generate JSON", desc: "Clojure data to a JSON string.", example: "(cheshire.core/generate-string {:ok true :count 2})" },
+      { name: "parse JSON", desc: "Pass true to keywordize the keys.", example: "(cheshire.core/parse-string (cheshire.core/generate-string {:id 7 :done false}) true)" },
+      { name: "JSON response", desc: "Same response shape, different content type.", example: "{:status 200 :headers {\"content-type\" \"application/json; charset=utf-8\"} :body (cheshire.core/generate-string {:ok true})}" },
     ],
   },
 ];

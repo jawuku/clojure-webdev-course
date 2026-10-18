@@ -52,7 +52,7 @@ jobs:
           fi
 
   content-semantics:
-    name: Content semantics (Clojure course)
+    name: Content semantics (Clojure + Web Dev)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -68,14 +68,14 @@ jobs:
         working-directory: frontend
         run: yarn install --frozen-lockfile
 
-      # Phase 3 removes js/, #js, clj->js/js->clj, .-length, cljs and
-      # catch :default from the Clojure course. `read` blocks, prose, hints and
-      # exercise tests never reach the JVM audit, so this static scan is the
-      # gate. It fails on new occurrences and on baseline entries that no longer
-      # occur (the list only shrinks).
+      # Phase 3 removed js/, #js, clj->js/js->clj, .-length, cljs and
+      # catch :default from the Clojure course; Phase 4 removed
+      # ClojureScript/Reagent/Scittle from the Web Dev course. `read` blocks,
+      # prose, hints and exercise tests never reach the JVM audit, so this
+      # static scan is the gate. --strict ignores the (now empty) baseline.
       - name: Check course content for JavaScript semantics
         working-directory: frontend
-        run: yarn check:semantics
+        run: yarn check:semantics --strict
 
   content-audit:
     name: Content audit (JVM)

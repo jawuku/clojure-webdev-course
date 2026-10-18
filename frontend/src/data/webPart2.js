@@ -1,106 +1,230 @@
-// Web Development with ClojureScript — Part 2: ClojureScript Fundamentals.
-// The Clojure you know, now running as JavaScript. Interop with the browser.
+// Web Development with Clojure — Part 2: Clojure on the server.
+// Ring requests and responses, middleware, and serving HTML with Hiccup.
 
 export const webPart2 = [
   {
-    id: "cljs-same-language",
-    title: "It's the Same Language",
-    group: "ClojureScript Fundamentals",
-    summary: "Your Clojure knowledge runs unchanged in the browser.",
+    id: "ring-request",
+    title: "A Request Is a Map",
+    group: "Clojure on the Server",
+    summary: "Ring turns an HTTP request into ordinary Clojure data.",
     content: [
-      { t: "p", text: "Good news first: almost everything you learned in the Clojure course works identically in ClojureScript. Vectors, maps, keywords, def/defn, map/filter/reduce, for, atoms — all the same. Every code box below runs live as ClojureScript." },
-      { t: "code", code: "(def fruits [\"apple\" \"pear\" \"plum\"])\n(map str/upper-case fruits)" },
-      { t: "p", text: "Data transformation you already know:" },
-      { t: "code", code: "(->> (range 1 11)\n     (filter even?)\n     (map #(* % %))\n     (reduce +))" },
-      { t: "h", text: "Atoms work too" },
-      { t: "p", text: "The atom you met for managing state is central to building UIs — a special reactive version powers Reagent. Here's the plain version as a refresher." },
-      { t: "code", code: "(def counter (atom 0))\n(swap! counter inc)\n(swap! counter inc)\n@counter" },
-      { t: "note", text: "There are a few differences from Clojure-on-the-JVM (numbers are JavaScript numbers, and you interoperate with JavaScript instead of Java). But the language you write day-to-day is the same. If you can read the code above, you're ready." },
+      { t: "p", text: "Clojure servers are built on Ring, a standard interface between a web server and your application. Its central idea is beautifully simple: an HTTP request arrives as a Clojure map. No special objects, no getter methods — just data you already know how to read." },
+      { t: "code", code: `(def request
+  {:request-method :get
+   :uri "/hello"
+   :headers {"accept" "text/html"}
+   :query-string "name=Ada"})
+
+[(:request-method request) (:uri request)]` },
+      { t: "h", text: "The keys you'll use most" },
+      { t: "list", items: [
+        ":request-method — the HTTP verb as a keyword: :get, :post, :put, :delete.",
+        ":uri — the path that was requested, like \"/todos\" or \"/todos/42\".",
+        ":headers — a map of header names (lower-case strings) to values.",
+        ":query-string — everything after the ? in the URL, still unparsed.",
+        ":body — the request body, as a stream, for form posts and uploads.",
+      ] },
+      { t: "p", text: "Reading a request is therefore just map access. Keyword lookup, get-in, destructuring — every tool from the Clojure course works." },
+      { t: "code", code: `(def request
+  {:uri "/todos"
+   :headers {"accept" "text/html"
+             "user-agent" "Parens"}})
+
+[(:uri request)
+ (get-in request [:headers "accept"])
+ (:lang request "en")]` },
+      { t: "note", text: "A request map is read-only data. You don't 'change the request'; you compute a response from it. That immutability is why Ring handlers are so easy to test: call the function with a plain map." },
     ],
     exercises: [
       {
-        prompt: "Using the tools you know, write `shout` that upper-cases a string and adds \"!\". e.g. (shout \"hi\") => \"HI!\".",
-        starter: "(defn shout [s]\n  )",
-        tests: ["(= (shout \"hi\") \"HI!\")", "(= (shout \"web\") \"WEB!\")"],
-        solution: "(defn shout [s]\n  (str (str/upper-case s) \"!\"))",
-        hint: "Combine str/upper-case with str and \"!\".",
+        prompt: "Write `request-path` that takes a request map and returns its path. e.g. (request-path {:uri \"/todos\"}) => \"/todos\".",
+        starter: "(defn request-path [request]\n  )",
+        tests: ["(= (request-path {:uri \"/todos\"}) \"/todos\")", "(= (request-path {:uri \"/\" :headers {}}) \"/\")"],
+        solution: "(defn request-path [request]\n  (:uri request))",
+        hint: "Look up the :uri key: (:uri request).",
       },
       {
-        prompt: "The tools from the Clojure course work unchanged. Write `sum-of-odd-squares` that takes numbers, keeps the odd ones, squares them, and sums them, using ->>. e.g. (sum-of-odd-squares [1 2 3 4 5]) => 35.",
-        starter: "(defn sum-of-odd-squares [nums]\n  )",
-        tests: ["(= (sum-of-odd-squares [1 2 3 4 5]) 35)", "(= (sum-of-odd-squares [2 4 6]) 0)"],
-        solution: "(defn sum-of-odd-squares [nums]\n  (->> nums (filter odd?) (map #(* % %)) (reduce +)))",
-        hint: "Thread with ->>: filter odd?, map square, reduce +.",
+        prompt: "Write `header` that takes a request map and a header name, and returns the value. e.g. (header request \"accept\") => \"text/html\".",
+        starter: "(defn header [request name]\n  )",
+        tests: ["(= (header {:headers {\"accept\" \"text/html\"}} \"accept\") \"text/html\")", "(= (header {:headers {}} \"accept\") nil)"],
+        solution: "(defn header [request name]\n  (get-in request [:headers name]))",
+        hint: "The headers are a nested map: (get-in request [:headers name]).",
       },
     ],
   },
 
   {
-    id: "js-interop",
-    title: "Talking to JavaScript (Interop)",
-    group: "ClojureScript Fundamentals",
-    summary: "Reach JavaScript objects, methods and properties from Clojure.",
+    id: "ring-response",
+    title: "A Response Is a Map",
+    group: "Clojure on the Server",
+    summary: "A handler is a function from request map to response map.",
     content: [
-      { t: "p", text: "Because ClojureScript runs as JavaScript, you can call any JavaScript function or object. This is called interop, and it uses a small, memorable set of syntax." },
-      { t: "h", text: "Global objects with js/" },
-      { t: "p", text: "The js/ prefix reaches a global JavaScript object, like Math or the browser's console." },
-      { t: "code", code: "(js/Math.max 3 9 2 7)" },
-      { t: "code", code: "(js/parseInt \"42px\" 10)" },
-      { t: "note", text: "One gotcha while we're here: parentheses always mean 'call it'. Classic JVM Clojure would write Math/sqrt — and this runtime happens to accept that JVM-style call too: (Math/sqrt 16) returns 4, because Math/ is mapped onto JavaScript's Math object. But only method-style calls work: reading a constant fails — (Math/PI) errors, and even (js/Math.PI) with parentheses does too. Read a constant with the bare form — js/Math.PI gives 3.14159… — or the .-property form you'll see below: (.-PI js/Math). Stick with js/ for everything: (js/Math.sqrt 16) calls a function, js/Math.PI reads a value." },
-      { t: "h", text: "Calling methods with .method" },
-      { t: "p", text: "To call a method ON an object, put a dot before the method name and the object first — like (.method object args...)." },
-      { t: "code", code: "(.toUpperCase \"clojurescript\")" },
-      { t: "code", code: "(.repeat \"ab\" 3)" },
-      { t: "h", text: "Reading properties with .-name" },
-      { t: "p", text: "To read a property (not call a method), use a dot-dash: (.-property object)." },
-      { t: "code", code: "(.-length \"clojure\")" },
-      { t: "h", text: "Converting between Clojure and JS data" },
-      { t: "p", text: "clj->js turns Clojure data into JavaScript objects/arrays; js->clj goes the other way. You'll need these when passing data to JavaScript libraries." },
-      { t: "code", code: "(clj->js {:name \"Ada\" :langs [\"clj\" \"cljs\"]})" },
-      { t: "note", text: "That's essentially the whole interop toolkit: js/… for globals, .method to call, .-prop to read, and clj->js / js->clj to convert. You'll use these constantly when working with the browser." },
+      { t: "p", text: "If requests are maps, responses are maps too. A Ring handler is simply a function that takes a request map and returns a response map. Handle a request, return some data — that's the whole job." },
+      { t: "code", code: `(defn hello [request]
+  {:status 200
+   :headers {"content-type" "text/html; charset=utf-8"}
+   :body "<h1>Hello, web!</h1>"})
+
+(hello {:uri "/"})` },
+      { t: "h", text: "The three keys of a response" },
+      { t: "list", items: [
+        ":status — a number: 200 OK, 404 Not Found, 302 Found (redirect), 500 Server Error.",
+        ":headers — a map of header names to string values. Always set content-type so the browser knows what it received.",
+        ":body — the content. A string for HTML or text; anything else needs a matching body-encoding middleware.",
+      ] },
+      { t: "p", text: "Because a handler is a normal function, you can choose the response with the same tools as any other code: if, cond, case, or a lookup in a map." },
+      { t: "code", code: `(defn greet [request]
+  (if (= "/admin" (:uri request))
+    {:status 403
+     :headers {"content-type" "text/plain; charset=utf-8"}
+     :body "Not allowed"}
+    {:status 200
+     :headers {"content-type" "text/plain; charset=utf-8"}
+     :body "Welcome"}))
+
+(mapv #(-> (greet {:uri %}) :status) ["/" "/admin"])` },
+      { t: "note", text: "A handler must always return a response map. Forgetting the map (or returning nil) is the most common first bug in a Ring app — the server has nothing to send, so the browser sees an error." },
     ],
     exercises: [
       {
-        prompt: "Use interop to write `char-count` that returns the number of characters in a string (its JS .length property).",
-        starter: "(defn char-count [s]\n  )",
-        tests: ["(= (char-count \"clojure\") 7)", "(= (char-count \"\") 0)"],
-        solution: "(defn char-count [s]\n  (.-length s))",
-        hint: "Read the .-length property: (.-length s).",
+        prompt: "Write `ok-response` that takes a body string and returns a 200 response with content-type \"text/html; charset=utf-8\" and that body.",
+        starter: "(defn ok-response [body]\n  )",
+        tests: ["(= (ok-response \"<h1>Hi</h1>\")\n   {:status 200\n    :headers {\"content-type\" \"text/html; charset=utf-8\"}\n    :body \"<h1>Hi</h1>\"})"],
+        solution: "(defn ok-response [body]\n  {:status 200\n   :headers {\"content-type\" \"text/html; charset=utf-8\"}\n   :body body})",
+        hint: "Build the map with :status, :headers and :body, putting the argument in :body.",
       },
       {
-        prompt: "Write `loudest` that returns the largest of three numbers using JavaScript's Math.max via js/.",
-        starter: "(defn loudest [a b c]\n  )",
-        tests: ["(= (loudest 3 9 2) 9)", "(= (loudest 5 1 4) 5)"],
-        solution: "(defn loudest [a b c]\n  (js/Math.max a b c))",
-        hint: "(js/Math.max a b c).",
+        prompt: "Write `not-found` that returns a 404 response with content-type \"text/plain; charset=utf-8\" and body \"Not found\".",
+        starter: "(defn not-found []\n  )",
+        tests: ["(= (not-found)\n   {:status 404\n    :headers {\"content-type\" \"text/plain; charset=utf-8\"}\n    :body \"Not found\"})"],
+        solution: "(defn not-found []\n  {:status 404\n   :headers {\"content-type\" \"text/plain; charset=utf-8\"}\n   :body \"Not found\"})",
+        hint: "Same shape as ok-response, with status 404 instead of 200.",
+      },
+      {
+        prompt: "Write `status-for` that returns 200 for the path \"/\" and 404 for anything else. e.g. (status-for {:uri \"/\"}) => 200.",
+        starter: "(defn status-for [request]\n  )",
+        tests: ["(= (status-for {:uri \"/\"}) 200)", "(= (status-for {:uri \"/nope\"}) 404)"],
+        solution: "(defn status-for [request]\n  (if (= \"/\" (:uri request)) 200 404))",
+        hint: "Compare (:uri request) with \"/\" using if.",
       },
     ],
   },
 
   {
-    id: "browser-apis",
-    title: "The Browser as a Playground",
-    group: "ClojureScript Fundamentals",
-    summary: "console, alerts, and the document — the browser's built-in tools.",
+    id: "ring-middleware",
+    title: "Middleware: Wrapping Handlers",
+    group: "Clojure on the Server",
+    summary: "Add behaviour to every request without repeating yourself.",
     content: [
-      { t: "p", text: "The browser exposes many objects your code can use. Two you'll meet immediately are the console (for printing debug messages) and the document (the live page itself)." },
-      { t: "h", text: "The console" },
-      { t: "p", text: "println works here and its output appears below the snippet. Under the hood it uses the browser's console — the same place developer tools show messages." },
-      { t: "code", code: "(println \"Hello from ClojureScript!\")\n(println \"2 + 2 =\" (+ 2 2))" },
-      { t: "h", text: "The document" },
-      { t: "p", text: "js/document represents the current page. In a real app you rarely touch it directly — libraries like Reagent do the heavy lifting — but it's good to know it's there. Reading its title is harmless:" },
-      { t: "code", code: "(.-title js/document)" },
-      { t: "h", text: "Why we don't hand-edit the page" },
-      { t: "p", text: "You COULD build a whole UI by manually creating and updating elements through js/document. But that quickly becomes tangled: you must remember to update every piece by hand whenever data changes. The rest of this course shows a far better way — describe what the UI should look like as data, and let Reagent keep the page in sync for you." },
-      { t: "note", text: "This 'describe it as data, let the library sync the page' approach is the single most important idea in modern frontend development. Everything from here builds toward it." },
+      { t: "p", text: "Real applications need the same work on many requests: logging, authentication, parsing a form body, adding a header. Ring's answer is middleware — a function that takes a handler and returns a new handler wrapped around it." },
+      { t: "p", text: "That sounds abstract, but the code is ordinary Clojure. A middleware is a function of one handler that returns a function of one request:" },
+      { t: "code", code: `(defn wrap-powered-by [handler]
+  (fn [request]
+    (update (handler request) :headers assoc "x-powered-by" "Parens")))
+
+(defn hello [request]
+  {:status 200
+   :headers {"content-type" "text/plain; charset=utf-8"}
+   :body "Hello"})
+
+((wrap-powered-by hello) {:uri "/"})` },
+      { t: "h", text: "Reading the wrapping" },
+      { t: "list", items: [
+        "wrap-powered-by receives the original handler.",
+        "It returns a new function that will be called with each request.",
+        "That function calls the original handler, then changes its response.",
+        "The caller sees a handler with the same shape — request in, response out.",
+      ] },
+      { t: "p", text: "Middlewares compose, because each one returns a handler. Wrap a handler in three middlewares and requests flow through all three, inside out." },
+      { t: "code", code: `(defn wrap-auth [handler]
+  (fn [request]
+    (if (= "secret" (get-in request [:headers "x-token"]))
+      (handler request)
+      {:status 401
+       :headers {"content-type" "text/plain; charset=utf-8"}
+       :body "Unauthorized"})))
+
+(defn wrap-json-header [handler]
+  (fn [request]
+    (update (handler request) :headers assoc "x-content-type" "application")))
+
+(defn dashboard [_]
+  {:status 200 :headers {} :body "secret data"})
+
+(def app (wrap-json-header (wrap-auth dashboard)))
+
+[(app {:headers {"x-token" "secret"}})
+ (app {:headers {}})]` },
+      { t: "note", text: "Middleware is where cross-cutting concerns live: sessions, cookies, form parsing, compression. A real Ring app is your routes wrapped in a stack of them. You rarely write them by hand once you use a framework, but knowing the shape makes the stack readable." },
     ],
     exercises: [
       {
-        prompt: "This lesson introduces two browser tools. Write a vector of their keywords, in the order introduced: :console and :document.",
-        starter: ";; write the vector\n",
-        tests: ["(= answer [:console :document])"],
-        solution: "[:console :document]",
-        hint: "The console (for printing) and the document (the live page): [:console :document].",
+        prompt: "Write `wrap-flag` — middleware that adds the header \"x-flag\" with value \"on\" to every response. e.g. ((wrap-flag (fn [_] {:status 200 :headers {} :body \"\"})) {}) => {:status 200 :headers {\"x-flag\" \"on\"} :body \"\"}.",
+        starter: "(defn wrap-flag [handler]\n  )",
+        tests: ["(= ((wrap-flag (fn [_] {:status 200 :headers {} :body \"\"})) {})\n   {:status 200 :headers {\"x-flag\" \"on\"} :body \"\"})"],
+        solution: "(defn wrap-flag [handler]\n  (fn [request]\n    (assoc-in (handler request) [:headers \"x-flag\"] \"on\")))",
+        hint: "Return a function of request that calls the handler, then assoc-in the header: (assoc-in response [:headers \"x-flag\"] \"on\").",
+      },
+      {
+        prompt: "Write `wrap-teapot` — middleware that changes every response's status to 418 while leaving the rest alone.",
+        starter: "(defn wrap-teapot [handler]\n  )",
+        tests: ["(= ((wrap-teapot (fn [_] {:status 200 :headers {\"a\" \"b\"} :body \"x\"})) {})\n   {:status 418 :headers {\"a\" \"b\"} :body \"x\"})"],
+        solution: "(defn wrap-teapot [handler]\n  (fn [request]\n    (assoc (handler request) :status 418)))",
+        hint: "Call the handler, then assoc the new :status.",
+      },
+    ],
+  },
+
+  {
+    id: "serving-html",
+    title: "Serving HTML with Hiccup",
+    group: "Clojure on the Server",
+    summary: "Turn Clojure vectors into the HTML a browser understands.",
+    content: [
+      { t: "p", text: "A response body is a string. Writing HTML by hand in a string works, but it is exactly the kind of tedious, error-prone work Clojure is good at. The library Hiccup turns Clojure data into HTML:" },
+      { t: "code", code: `(require '[hiccup.core :as hiccup])
+
+(hiccup/html [:h1 "Hello, web!"])` },
+      { t: "p", text: "The vector is the element, the keyword is the tag, the string is its text. Attributes go in a map right after the tag. The result is a plain string, ready for a response body." },
+      { t: "code", code: `(require '[hiccup.core :as hiccup])
+
+(hiccup/html
+ [:main
+  [:h1 "My Todos"]
+  [:p {:class "intro"} "A page built from Clojure data."]])` },
+      { t: "h", text: "Putting it in a handler" },
+      { t: "p", text: "Now the two ideas meet: a handler returns a response map, and Hiccup supplies the body. This is a complete, working page — request map in, response map out." },
+      { t: "code", code: `(require '[hiccup.core :as hiccup])
+
+(defn page [request]
+  {:status 200
+   :headers {"content-type" "text/html; charset=utf-8"}
+   :body (hiccup/html
+          [:main
+           [:h1 "Hello, web!"]
+           [:p "You asked for " (:uri request)]])})
+
+(:body (page {:uri "/hello"}))` },
+      { t: "note", text: "Hiccup does not escape strings for you: a body like [:p \"a & b\"] is inserted as written. For user-supplied text use hiccup.core/h, which escapes &, < and >. That distinction matters as soon as you display a name someone typed." },
+      { t: "code", code: `(require '[hiccup.core :as hiccup])
+
+[(hiccup/html [:p "1 < 2 & 3 > 2"])
+ (hiccup/html [:p (hiccup/h "1 < 2 & 3 > 2")])]` },
+    ],
+    exercises: [
+      {
+        prompt: "Write `page-body` that returns the HTML string for a main element containing an h1 \"Hello\" and a p \"Welcome\". Use hiccup.core/html.",
+        starter: "(defn page-body []\n  )",
+        tests: ["(= (page-body) \"<main><h1>Hello</h1><p>Welcome</p></main>\")"],
+        solution: "(defn page-body []\n  (hiccup.core/html [:main [:h1 \"Hello\"] [:p \"Welcome\"]]))",
+        hint: "Pass the whole vector to hiccup.core/html: (hiccup.core/html [:main [:h1 \"Hello\"] [:p \"Welcome\"]]) .",
+      },
+      {
+        prompt: "Write `greeting` that returns HTML for an h1 saying \"Hello, NAME\", using the name it receives. e.g. (greeting \"Ada\") => \"<h1>Hello, Ada</h1>\".",
+        starter: "(defn greeting [name]\n  )",
+        tests: ["(= (greeting \"Ada\") \"<h1>Hello, Ada</h1>\")", "(= (greeting \"web\") \"<h1>Hello, web</h1>\")"],
+        solution: "(defn greeting [name]\n  (hiccup.core/html [:h1 (str \"Hello, \" name)]))",
+        hint: "Build the text with str inside the vector: [:h1 (str \"Hello, \" name)].",
       },
     ],
   },

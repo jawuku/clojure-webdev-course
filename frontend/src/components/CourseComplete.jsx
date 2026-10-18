@@ -105,7 +105,7 @@ export function CourseComplete({ nextCourse, onSwitchCourse }) {
             </h2>
             <p className="celebrate-sub">
               You finished <strong>{name}</strong> — and every course here.
-              Clojure, ClojureScript and Regex, all complete. That's real range. Bravo.
+              Clojure, web development and Regex, all complete. That's real range. Bravo.
             </p>
             <button
               className="celebrate-cta"

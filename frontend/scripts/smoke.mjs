@@ -187,7 +187,12 @@ async function main() {
     });
     page.on("pageerror", (error) => pageErrors.push(String(error)));
     page.on("requestfailed", (request) => {
-      failedRequests.push(`${request.url()} — ${request.failure()?.errorText}`);
+      const failure = request.failure()?.errorText || "unknown";
+      // Navigating away cancels in-flight document loads (including an iframe
+      // the previous lesson had just mounted); the browser reports those as
+      // ERR_ABORTED. Fetch/XHR aborts are still failures.
+      if (failure.includes("ERR_ABORTED") && request.resourceType() === "document") return;
+      failedRequests.push(`${request.url()} — ${failure}`);
     });
     page.on("request", (request) => {
       const target = new URL(request.url());
@@ -226,12 +231,69 @@ async function main() {
     await switchCourse(page, "webdev", "Hiccup");
     const web = await countLessons(page);
     check("Web Dev course renders every lesson", web.seen === web.total, `${web.seen}/${web.total}`);
+
+    // Hiccup: a snippet renders through the JVM's hiccup.core/html into a
+    // sandboxed iframe. The frame is opaque-origin, so read it via CDP frames
+    // rather than contentDocument.
+    await page.goto(`${origin}/?lesson=hiccup-intro`);
+    await page.waitForSelector('[data-testid="hiccup-snippet"]');
+    const firstHiccup = page.locator('[data-testid="hiccup-snippet"]').first();
+    await firstHiccup.locator('[data-testid="hiccup-run"]').click();
+    await page.waitForSelector('[data-testid="hiccup-frame"]', { timeout: 20_000 });
+    const sandbox = await page.locator('[data-testid="hiccup-frame"]').first().getAttribute("sandbox");
+    let hiccupText = "";
+    for (let attempt = 0; attempt < 50 && !hiccupText.includes("Hello, Hiccup!"); attempt += 1) {
+      for (const frame of page.frames()) {
+        if (frame.url() === "about:srcdoc") {
+          hiccupText = await frame.evaluate(() => document.body.innerText).catch(() => "");
+          if (hiccupText.includes("Hello, Hiccup!")) break;
+        }
+      }
+      if (!hiccupText.includes("Hello, Hiccup!")) await sleep(200);
+    }
     check(
-      "Reagent lessons render a read-only placeholder",
-      (await page.locator('[data-testid="reagent-coming-soon"]').count()) > 0 ||
-        (await page.locator('[data-testid="reagent-snippet"]').count()) === 0,
-      "no broken preview"
+      "Hiccup previews render through hiccup.core/html",
+      hiccupText.includes("Hello, Hiccup!"),
+      hiccupText.replace(/\s+/g, " ").slice(0, 80)
     );
+    check("Hiccup preview iframe is sandboxed", sandbox === "", JSON.stringify(sandbox));
+
+    // Capstone: the real Ring app in an iframe, driven by HTMX.
+    await page.goto(`${origin}/?lesson=todo-capstone`);
+    await page.waitForSelector('[data-testid="live-app-frame"]', { timeout: 20_000 });
+    let live = null;
+    for (let attempt = 0; attempt < 50 && !live; attempt += 1) {
+      live = page.frames().find((frame) => frame.url().includes("/preview/todos"));
+      if (!live) await sleep(200);
+    }
+    check("capstone Ring app loads in its iframe", Boolean(live));
+    if (live) {
+      await live.waitForSelector('input[name="text"]', { timeout: 20_000 });
+      const before = await live.locator(".todo").count();
+      await live.fill('input[name="text"]', "Write tests");
+      await live.click("button.primary");
+      await live.waitForFunction(
+        () => document.body.innerText.includes("Write tests"),
+        null,
+        { timeout: 20_000 }
+      );
+      const after = await live.locator(".todo").count();
+      check(
+        "capstone is interactive end-to-end on the Ring app",
+        after === before + 1,
+        `${before} -> ${after} todos`
+      );
+      await live.click(".todo:last-child .toggle");
+      await live.waitForFunction(
+        () => {
+          const last = document.querySelector(".todo:last-child .text");
+          return last && last.classList.contains("is-done");
+        },
+        null,
+        { timeout: 20_000 }
+      );
+      check("capstone toggles a todo through a second request", true);
+    }
 
     await switchCourse(page, "regex", "Regex");
     const regex = await countLessons(page);

@@ -5,9 +5,12 @@
  * Loads the course modules with Vite (so `@` aliases and ESM imports work),
  * starts the desktop jar (or uses --url), then for every course:
  *   - evaluates every runnable lesson block ({ t: "code" })
+ *   - renders every Hiccup block ({ t: "hiccup" }) with hiccup.core/html and
+ *     records the HTML as its expected value
  *   - runs every exercise solution against its hidden tests
  *   - evaluates every cheat-sheet example
- * `{ t: "read" }` and `{ t: "reagent" }` blocks are intentionally not runnable.
+ * `{ t: "read" }` and `{ t: "live-app" }` blocks are not snippet-run: the live
+ * Ring app is covered by the browser smoke test.
  *
  * Failures are checked against a baseline of known content debt (ClojureScript
  * snippets waiting for Phases 3–5). New failures fail CI; entries that start
@@ -175,6 +178,7 @@ function makeClient(origin, token) {
     api,
     latencies,
     eval: (code, ns) => api("/api/eval", { code, ns }),
+    hiccup: (code, ns) => api("/api/hiccup", { code, ns }),
     exercise: (code, tests) => api("/api/exercise", { code, tests }),
   };
 }
@@ -307,6 +311,7 @@ async function main() {
     const failures = new Map();
     const counts = {
       snippets: 0,
+      hiccupSnippets: 0,
       exercises: 0,
       cheatItems: 0,
       skippedReadables: 0,
@@ -366,14 +371,22 @@ async function main() {
       for (const lesson of course.LESSONS) {
         const blocks = lesson.content || [];
         for (const [index, block] of blocks.entries()) {
-          if (block.t !== "code" || !block.code) {
-            if (block.t === "read" || block.t === "reagent") counts.skippedReadables += 1;
+          if ((block.t !== "code" && block.t !== "hiccup") || !block.code) {
+            if (block.t === "read" || block.t === "live-app") counts.skippedReadables += 1;
             continue;
           }
-          counts.snippets += 1;
+          const isHiccup = block.t === "hiccup";
+          if (isHiccup) counts.hiccupSnippets += 1;
+          else counts.snippets += 1;
           const key = failureKey(course.id, "snippet", `${lesson.id}/${index}`);
           try {
-            const result = await client.eval(block.code, course.ns);
+            const response = isHiccup
+              ? await client.hiccup(block.code, course.ns)
+              : await client.eval(block.code, course.ns);
+            // A Hiccup block's value is the HTML hiccup.core/html produced.
+            const result = isHiccup
+              ? { ok: response.ok === true, value: response.html ?? "", output: response.output ?? "", error: response.error }
+              : response;
             if (!result.ok) {
               failures.set(key, {
                 key,
@@ -507,8 +520,9 @@ async function main() {
     const refreshing = args.updateBaseline || args.updateValues;
 
     console.log(
-      `\n${counts.snippets} code blocks · ${counts.exercises} exercise solutions · ` +
-        `${counts.cheatItems} cheat-sheet examples (${counts.skippedReadables} read-only blocks skipped)`
+      `\n${counts.snippets} code blocks · ${counts.hiccupSnippets} Hiccup previews · ` +
+        `${counts.exercises} exercise solutions · ${counts.cheatItems} cheat-sheet examples ` +
+        `(${counts.skippedReadables} read-only/live-app blocks skipped)`
     );
     console.log(
       `eval latency: p50 ${p50.toFixed(1)} ms · p95 ${p95.toFixed(1)} ms ` +

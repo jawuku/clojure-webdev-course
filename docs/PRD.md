@@ -1,6 +1,51 @@
-# Parens — Multi-Course Clojure(Script) Learning App
+# Parens — Multi-Course Clojure Learning App
 
-## Original Problem Statement
+## Current state (2026-10)
+
+Parens is an offline desktop app that teaches **Clojure**, **Web Development with
+Clojure**, and **Regular Expressions** in one UI. The browser/SCI era described later in
+this document is history; the current design is the JVM migration plan in
+[`JVM_DESKTOP_MIGRATION_PLAN.md`](JVM_DESKTOP_MIGRATION_PLAN.md).
+
+- **Shell:** a JDK 25 process serves a React 19 / Vite 7 UI on `127.0.0.1` from a random
+  port and opens it in the browser. Every `/api/*` call needs a per-launch token; Host,
+  Origin and `Sec-Fetch-Site` are checked. There is no CDN, analytics or network use at
+  runtime.
+- **Evaluation:** learner code runs in a separate, killable child JVM
+  (`clojure.core/eval`, real Java) over newline-delimited EDN. A timeout or
+  `System/exit` kills and restarts the worker; the UI survives.
+- **Courses (74 lessons, 149 exercises):**
+  1. **Parens — Learn Clojure** — 37 lessons, 77 exercises, JVM semantics (ratios,
+     Longs, `Math/`, `java.time`, `ex-info`).
+  2. **Hiccup — Web Dev with Clojure** — 19 lessons, 38 exercises. Web foundations, Ring
+     request/response maps, middleware, Hiccup, HTMX, Reitit-style routing, JSON and a
+     capstone. Hiccup previews are rendered by `hiccup.core/html` in the worker and shown
+     in a sandboxed iframe; the capstone is a real Ring app served at `/preview/todos`
+     and driven by vendored htmx 2.0.11.
+  3. **Regex — Master Regular Expressions** — 18 lessons, 34 exercises, plus Regex Golf.
+     Still taught on JavaScript regex semantics; Phase 5 moves it to `java.util.regex`.
+- **Content checks:** a JVM audit runs every runnable block, Hiccup preview, exercise
+  solution and cheat-sheet example (383 asserted values, 19 known Regex failures), and a
+  static semantics guard rejects JavaScript/ClojureScript forms in the Clojure and Web Dev
+  courses.
+- **Progress and theme** are still per course in `localStorage` (Phase 6 replaces this with
+  an app-data `state.edn`). Installers are built in CI per OS; signing/notarization still
+  needs release certificates.
+
+Phase status: **0–4 complete** (slice, Vite, runtime + audit, Clojure course, Web Dev
+course), **5–7 pending** (Regex, persistence/offline/packaging polish, release). Results:
+[`PHASE0_RESULTS.md`](PHASE0_RESULTS.md) … [`PHASE4_RESULTS.md`](PHASE4_RESULTS.md).
+
+---
+
+## Historical log
+
+The sections below are the original product log from 2026-06. They describe the
+browser/SCI implementation that Phases 0–4 replaced, and are kept for context. Where a
+statement is now false (for example, the Vite “decided against” entry), the superseding
+note is inline.
+
+## Original Problem Statement (2026-06, superseded)
 Build a beginner course "Web Development with ClojureScript" that builds upon the user's
 existing Clojure course project (jawuku/learn-clojure). Inherit the existing UI for a
 consistent look & feel, add it as a SECOND course in the SAME app, keep it visually
@@ -8,7 +53,7 @@ identical, and provide LIVE in-browser code execution including a Reagent runtim
 (`webCourse.js` with reagent runtimeScripts). Chapter 1 should cover the design of the WWW
 and a brief technology overview for novices. Learners should complete the Clojure course first.
 
-## Architecture
+## Architecture (2026-06, superseded)
 - Frontend-only React 19 app (CRACO), 100% client-side. No backend, no auth, no DB.
 - In-browser evaluation via Scittle/SCI (loaded from CDN in public/index.html).
 - Reusable "course engine" `src/course/registry.js` (`buildCourse`) drives a course-agnostic UI.
@@ -22,13 +67,13 @@ and a brief technology overview for novices. Learners should complete the Clojur
 ## User Personas
 - Complete beginners who finished the Clojure course and want to build web UIs.
 
-## Core Requirements (static)
+## Core Requirements (2026-06, superseded)
 - Inherit existing UI, themes (Kanagawa/Gruvbox), REPL, search, cheat sheet, progress.
 - Second course, visually identical, with a course switcher.
 - Live, editable, runnable ClojureScript + live-rendered Reagent components.
 - Ch.1 = WWW design + tech overview for novices; Clojure course as prerequisite.
 
-## What's Been Implemented (2026-06)
+## What's Been Implemented (2026-06, historical)
 - NEW course "Web Dev with ClojureScript" (id `webdev`, brand "</> Hiccup"), 19 lessons in 5 groups:
   1. The Web & Its Foundations (welcome/prereq, WWW design, how the web works, HTML, CSS, JS+cljs)
   2. ClojureScript Fundamentals (same language, JS interop, browser APIs)
@@ -43,7 +88,7 @@ and a brief technology overview for novices. Learners should complete the Clojur
 - Verified by testing agent (iteration_1.json): 100% frontend, 0 console errors — live Hiccup render,
   reactive counter, live forms, To-Do add/toggle, exercises, and Clojure regression all PASS.
 
-## Prioritized Backlog / Next Tasks
+## Prioritized Backlog / Next Tasks (2026-06, historical)
 - P1: Reconcile ordering with the user's official syllabus PDF (currently used my proposed outline;
   Drive link was sign-in restricted — awaiting "Anyone with the link" or pasted text).
 - P2: Add more exercises to Reagent lessons; a "clear completed / filter" extension to the capstone.
@@ -100,10 +145,13 @@ and a brief technology overview for novices. Learners should complete the Clojur
   (a stray `}` near EOF was the misplaced closer). This had silently broken the celebration
   overlay styling AND the lesson CTA boxes. Verified via Playwright + computed styles.
 
-## Update (2026-06): Vite migration — DECIDED AGAINST
+## Update (2026-06): Vite migration — DECIDED AGAINST (reversed in 2026-10)
 - User considered migrating CRA/CRACO -> Vite. After checking platform compatibility
   (support_agent), confirmed it would likely break Emergent Visual Edits
   (@emergentbase/visual-edits is webpack/craco-specific), drop the webpack health-check
   integration, and jeopardize the managed Deploy flow (build/ -> dist/, supervisor pinned to
   yarn start on 0.0.0.0:3000). User chose to KEEP CRA — the app works fine; "deprecated" CRA
   doesn't affect functionality. No code changes made. (Roadmap item closed: won't-do.)
+- **Reversed in Phase 1 (2026-10):** the app did migrate to Vite 7. The managed
+  Emergent/CRACO deploy path was dropped along with the local-SPA hosting; the UI is now
+  served by the JVM app from `desktop/resources/public`. See `PHASE1_RESULTS.md`.

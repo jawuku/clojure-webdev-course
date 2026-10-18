@@ -8,16 +8,19 @@ kept in the repo for transparency and future maintainers.
 
 ### `PRD.md` — Product Requirements & development log
 
-The original product requirements document for the multi-course learning app
-("Parens"), kept up to date as a living development log. It records:
+The product requirements document for the multi-course learning app ("Parens").
+Its top section describes the **current** JVM/Vite app (Phases 0–4); the rest is the
+2026-06 browser/SCI development log, kept for context. It records:
 
-- The **original problem statement** (a beginner Web Development with
-  ClojureScript course building on the existing Clojure course).
+- The **original problem statement** (a beginner web-development course building on the
+  existing Clojure course, originally written for ClojureScript in the browser).
 - The **architecture** at the time it was written (React 19 / CRA+CRACO,
   SCI/Scittle in-browser evaluation, the reusable `buildCourse` engine,
   per-course namespaces). The app has since moved to a Vite build and a local
   JVM runtime; see `PHASE1_RESULTS.md` and `JVM_DESKTOP_MIGRATION_PLAN.md` for
-  the current design.
+  the current design. The browser course has since been replaced by the JVM
+  Ring/Hiccup/HTMX course (`PHASE4_RESULTS.md`). The PRD's top section is the
+  current summary; the older sections are explicitly historical.
 - The **user personas** and core requirements.
 - A **what's-been-implemented** history, including the notable decisions:
   the React 17 → 18 upgrade for live Reagent rendering, merging the standalone
@@ -26,6 +29,14 @@ The original product requirements document for the multi-course learning app
 
 It's the best starting point for understanding *why* the codebase looks the way
 it does.
+
+### `PHASE0_RESULTS.md` … `PHASE4_RESULTS.md` — migration QA history
+
+One report per completed migration phase: the vertical JVM slice (Phase 0), the Vite UI
+(Phase 1), the runtime API and content audit (Phase 2), the Clojure course on JVM semantics
+(Phase 3), and the Ring/Hiccup/HTMX web course (Phase 4). Each records what changed, the
+measured numbers (startup, eval latency, audit baselines, browser checks) and the remaining
+limitations. `JVM_DESKTOP_MIGRATION_PLAN.md` is the plan those reports track.
 
 ### `test_reports/` — Iteration QA history
 
@@ -46,14 +57,14 @@ The reports are **historical artifacts** — chronological snapshots of the QA
 process, not a current test suite. The current checks are the Vite build guards
 (`yarn check:offline`), the browser smoke test (`frontend/scripts/smoke.mjs`,
 run by `.github/workflows/frontend-ci.yml`) and the JVM security/worker suite.
-The older `frontend/scripts/audit-*.mjs` scripts are parked: they drove
-Scittle in a browser and are replaced by the Clojure content audit in Phase 2.
+The older `frontend/scripts/audit-*.mjs` scripts (which drove Scittle in a browser) were
+removed in Phase 2; they are replaced by the JVM content audit (`yarn audit:content`).
 
 ### `test_result.md` (removed)
 
 The agent-to-agent testing-protocol template that previously sat at the repo root
-was removed — it documented an obsolete dev-time workflow, superseded by the
-`audit-*.mjs` scripts and CI.
+was removed — it documented an obsolete dev-time workflow, superseded by the content audit
+and CI.
 
 > Note: `docs/test_credentials.md` is listed in `.gitignore` — this app has no
 > auth or backend, so no credentials are expected; the ignore rule is just

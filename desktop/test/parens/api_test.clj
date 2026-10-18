@@ -5,8 +5,10 @@
   fast enough for every CI run. The end-to-end checker also exercises the same
   rules over a real loopback connection."
   (:require [cheshire.core :as json]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [parens.api :as api]
+            [parens.preview :as preview]
             [parens.runtime :as runtime])
   (:import [java.io StringReader]))
 
@@ -188,6 +190,84 @@
                                          {:token token
                                           :headers {"content-length" (str (* 2 1024 1024))}}))]
       (is (= 413 (:status response))))))
+
+(deftest hiccup-body-is-validated
+  (testing "code must be a string"
+    (let [response ((handler) (post-json "/api/hiccup" "{\"code\":42}" {:token token}))]
+      (is (= 400 (:status response)))
+      (is (re-find #"code must be a string" (:error (body response))))))
+
+  (testing "invalid namespace"
+    (let [response ((handler) (post-json "/api/hiccup"
+                                         "{\"code\":\"[:p \\\"hi\\\"]\",\"ns\":\"bad ns\"}"
+                                         {:token token}))]
+      (is (= 400 (:status response)))))
+
+  (testing "the endpoint is behind the launch token"
+    (let [response ((handler) (post-json "/api/hiccup" "{\"code\":\"[:p \\\"hi\\\"]\"}"))]
+      (is (= 401 (:status response))))))
+
+(deftest preview-session-is-token-protected-and-sets-a-strict-cookie
+  (testing "no token"
+    (is (= 401 (:status ((handler) (post-json "/api/preview/session" "{}"))))))
+
+  (testing "a valid token starts a session"
+    (let [response ((handler) (post-json "/api/preview/session" "{}" {:token token}))
+          cookie (get-in response [:headers "set-cookie"])]
+      (is (= 200 (:status response)))
+      (is (re-find #"^parens-preview=" cookie))
+      (is (re-find #"HttpOnly" cookie))
+      (is (re-find #"SameSite=Strict" cookie)))))
+
+(defn- preview-session []
+  (let [response ((handler) (post-json "/api/preview/session" "{}" {:token token}))
+        cookie (first (str/split (get-in response [:headers "set-cookie"]) #";"))]
+    (when (re-find #"^parens-preview=" cookie) cookie)))
+
+(deftest live-preview-requires-its-session-cookie
+  (preview/start-session!)
+  (is (= 403 (:status ((handler) (request :get "/preview/todos")))))
+  (is (= 403 (:status ((handler) (request :get "/preview/todos"
+                                          {:headers {"cookie" "parens-preview=wrong"}}))))))
+
+(deftest live-preview-renders-and-mutates-the-todo-app
+  (let [cookie (preview-session)
+        page ((handler) (request :get "/preview/todos" {:headers {"cookie" cookie}}))
+        html (body-text page)]
+    (is (= 200 (:status page)))
+    (testing "the page is server-rendered Hiccup with vendored htmx"
+      (is (str/includes? html "/vendor/htmx.min.js"))
+      (is (str/includes? html "hx-post=\"/preview/todos\""))
+      (is (str/includes? html "Learn Hiccup"))
+      (is (str/includes? (get-in ((handler) (request :get "/")) [:headers "content-security-policy"])
+                         "frame-src 'self'"))
+      (is (re-find #"script-src 'self'" (get-in page [:headers "content-security-policy"]))))
+
+    (testing "adding a todo returns just the list fragment"
+      (let [response ((handler) (request :post "/preview/todos"
+                                         {:headers {"cookie" cookie}
+                                          :body "text=Write+a+Ring+handler"}))
+            fragment (body-text response)]
+        (is (= 200 (:status response)))
+        (is (re-find #"Write a Ring handler" fragment))
+        (is (not (re-find #"<html" fragment)))))
+
+    (testing "toggling and deleting go through the same request/response cycle"
+      (let [toggled (body-text ((handler) (request :post "/preview/todos/1/toggle"
+                                                   {:headers {"cookie" cookie}})))
+            deleted (body-text ((handler) (request :post "/preview/todos/2/delete"
+                                                   {:headers {"cookie" cookie}})))]
+        (is (re-find #"0 of 3 done" toggled))
+        (is (not (re-find #"Build a Ring handler" deleted)))))))
+
+(deftest live-preview-rejects-cross-site-requests
+  (let [cookie (preview-session)]
+    (is (= 403 (:status ((handler) (request :get "/preview/todos"
+                                            {:headers {"cookie" cookie
+                                                       "sec-fetch-site" "cross-site"}})))))
+    (is (= 403 (:status ((handler) (request :get "/preview/todos"
+                                            {:headers {"cookie" cookie
+                                                       "origin" "http://evil.example"}})))))))
 
 (deftest exercise-body-is-validated
   (is (= 400 (:status ((handler) (post-json "/api/exercise" "{\"code\":\"(def x 1)\"}"

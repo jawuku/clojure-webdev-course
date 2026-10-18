@@ -1,6 +1,9 @@
 # Phase 0 results — local JVM vertical slice
 
 Date: 2026-10-17
+> **Historical snapshot.** Counts are from the original slice. The checker now runs 31
+> checks (it also covers the Hiccup/preview additions); see `desktop/README.md`.
+
 Status: **PASS** (28/28 checker checks on the uberjar, the Linux `jpackage` app-image,
 Ubuntu 24.04 and Fedora 43 rebuilds, and the installed `.deb` and `.rpm`; 15 `lein test`
 tests cover the security boundary and worker recovery)

@@ -1,6 +1,7 @@
 import { RunnableSnippet } from "./RunnableSnippet";
 import { StaticSnippet } from "./StaticSnippet";
-import { ReagentSnippet } from "./ReagentSnippet";
+import { HiccupSnippet } from "./HiccupSnippet";
+import { LiveApp } from "./LiveApp";
 import { Exercise } from "./Exercise";
 import { GolfLeaderboard } from "./GolfLeaderboard";
 import { useApp } from "../context/AppContext";
@@ -35,8 +36,10 @@ function Block({ block, onSwitchCourse }) {
       return <RunnableSnippet code={block.code} />;
     case "read":
       return <StaticSnippet code={block.code} />;
-    case "reagent":
-      return <ReagentSnippet code={block.code} />;
+    case "hiccup":
+      return <HiccupSnippet code={block.code} />;
+    case "live-app":
+      return <LiveApp />;
     case "golf-board":
       return <GolfLeaderboard />;
     case "list":

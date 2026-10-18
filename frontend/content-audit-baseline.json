@@ -19,18 +19,6 @@
     "regex|snippet|global-flag/11",
     "regex|snippet|global-flag/14",
     "regex|snippet|named-groups/6",
-    "regex|snippet|named-groups/9",
-    "webdev|cheatsheet|JavaScript interop/.-property",
-    "webdev|cheatsheet|JavaScript interop/clj->js",
-    "webdev|cheatsheet|JavaScript interop/js->clj",
-    "webdev|cheatsheet|JavaScript interop/js/parseInt",
-    "webdev|cheatsheet|JavaScript interop/js/…",
-    "webdev|exercise|js-interop/0",
-    "webdev|exercise|js-interop/1",
-    "webdev|snippet|browser-apis/6",
-    "webdev|snippet|js-interop/12",
-    "webdev|snippet|js-interop/15",
-    "webdev|snippet|js-interop/3",
-    "webdev|snippet|js-interop/4"
+    "regex|snippet|named-groups/9"
   ]
 }

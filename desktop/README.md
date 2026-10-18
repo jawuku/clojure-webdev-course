@@ -2,11 +2,14 @@
 
 This is the local JVM app from [Phase 0](../docs/PHASE0_RESULTS.md) of
 [`docs/JVM_DESKTOP_MIGRATION_PLAN.md`](../docs/JVM_DESKTOP_MIGRATION_PLAN.md), now
-serving the real Vite UI from Phase 1:
+serving the current Vite UI and both JVM-native courses (Phases 1–4):
 
 - A JVM app process serving a UI on `127.0.0.1` from a random port.
-- A token-protected HTTP API (`eval`, `exercise`, `set-ns`, `runtime`, `reset`).
+- A token-protected HTTP API (`eval`, `hiccup`, `exercise`, `set-ns`, `runtime`,
+  `reset`, `preview/session`).
 - A separate child JVM that evaluates real Clojure, killed and restarted on timeout.
+- Hiccup rendering with the real `hiccup.core/html`, plus the Course 2 capstone Ring app
+  at `/preview/todos` (vendored htmx, session-cookie gated).
 - A Linux `jpackage` app-image with no first-run downloads.
 
 `resources/public` is the built UI, copied there by `yarn build:desktop` in
@@ -51,7 +54,9 @@ All `/api/*` routes except `/api/health` require `X-Parens-Token`.
 | GET | `/api/runtime` | — | `{ok, active-ns, pid, clojure, java, timeout-ms, server-pid}` |
 | POST | `/api/set-ns` | `{ns}` | `{ok, ns}` — default namespace for evals that omit `ns` |
 | POST | `/api/eval` | `{code, ns?}` | `{ok, value, output, error, ms}` or `{ok:false, timeout:true}` |
+| POST | `/api/hiccup` | `{code, ns?}` | `{ok, html, output, error, ms}` — the last form rendered by `hiccup.core/html` |
 | POST | `/api/exercise` | `{code, tests:[string]}` | `{ok, passed, results:[{test,ok,detail}], runError, output, ms}` |
+| POST | `/api/preview/session` | — | `{ok}` + a `parens-preview` `Set-Cookie` for the live capstone |
 | POST | `/api/reset` | — | restarts the worker |
 
 `value` is `pr-str` of the last form. Code is read and evaluated one top-level form at a
@@ -60,14 +65,36 @@ time (like a REPL), so `defprotocol`/`defrecord` definitions are visible to late
 Exercise code runs in a fresh `exerciseN` namespace with `answer` bound to the last value,
 matching the app's `runExerciseTests` semantics.
 
+## Live course preview
+
+Course 2 renders Hiccup through `/api/hiccup` (the worker calls the real
+`hiccup.core/html`) and embeds it in a sandboxed iframe. Its capstone is a small Ring app:
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET | `/preview/todos` | full page, server-rendered Hiccup + vendored htmx |
+| POST | `/preview/todos` | add a todo; returns the `#todos` fragment plus an out-of-band input reset |
+| POST | `/preview/todos/:id/toggle` | toggle done; returns the fragment |
+| POST | `/preview/todos/:id/delete` | delete; returns the fragment |
+
+These routes do **not** use `X-Parens-Token` — an iframe navigation cannot set headers.
+They require the `parens-preview` cookie issued by the token-protected
+`/api/preview/session`, and still pass the Host/Origin/`Sec-Fetch-Site` checks. State lives
+in a per-launch atom; it is a teaching demo, not user data.
+
 ## Security model
 
 - Loopback bind only (`127.0.0.1`), random port, random 32-byte token.
 - `Host` must be `127.0.0.1`/`localhost` (blocks DNS rebinding).
 - `Origin`, when present, must be the local app origin; no CORS headers.
 - `Sec-Fetch-Site`, when present, must be `same-origin` or `none`.
-- Strict CSP on the static page; no inline scripts. `style-src` allows inline
-  styles because CodeMirror injects its theme into a `<style>` element at runtime.
+- Strict CSP on the static page; no inline scripts and no `unsafe-eval` (HTMX's
+  `hx-on` handlers would need it, so the preview uses an out-of-band swap instead).
+  `style-src` allows inline styles because CodeMirror injects its theme into a `<style>`
+  element at runtime; `frame-src 'self'` allows the same-origin capstone iframe.
+- The preview page sets its own stricter CSP (`default-src 'none'`, `script-src 'self'`,
+  `style-src 'unsafe-inline'`) and requires the per-launch preview cookie, which is
+  `HttpOnly` and `SameSite=Strict`.
 - Body size limit and code length limit.
 
 The evaluator is **not a sandbox**. Learner code is trusted local code: it can
@@ -106,7 +133,9 @@ those plus the end-to-end checker on JDK 25.
 The checker starts the app, validates auth/Host/Origin rejection, exercises JVM
 semantics (ratios, `Math/`, Long, numeric equality, divide-by-zero), runs the
 exercise path, measures cold start and eval latency, proves timeout and
-`System/exit` recovery, and verifies that no worker JVM survives shutdown.
+`System/exit` recovery, and verifies that no worker JVM survives shutdown. The
+rendered UI (Hiccup previews, the capstone Ring app, exercises) is covered by
+`frontend/scripts/smoke.mjs`.
 
 ## Linux app image
 

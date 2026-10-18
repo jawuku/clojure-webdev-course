@@ -1,16 +1,17 @@
 # Parens — Learn Clojure on a Local JVM
 
 An interactive, **multi-course** learning platform that teaches **Clojure**, then
-**Web Development with ClojureScript**, plus a standalone **Regular Expressions** course,
-to complete beginners. Every lesson is written in plain English, code examples are
+**Web Development with Clojure** (Ring, Hiccup and HTMX on the JVM), plus a standalone
+**Regular Expressions** course, to complete beginners. Every lesson is written in plain English, code examples are
 syntax-highlighted, and **code runs in a real JVM inside the app** — not in a browser
 sandbox, and with no network connection once the app has launched.
 
 - **Course 1 — Parens · Learn Clojure:** 37 lessons from first principles (values,
   functions, collections, higher-order functions, recursion, macros/protocols).
-- **Course 2 — Hiccup · Web Dev with ClojureScript:** 19 lessons that build on Course 1 —
-  the design of the WWW, HTML/CSS/JS, ClojureScript & JS interop, **Hiccup**, and
-  **Reagent components** (state, events, forms) culminating in a to-do app.
+- **Course 2 — Hiccup · Web Dev with Clojure:** 19 lessons that build on Course 1 —
+  the design of the WWW, HTML/CSS/JS, **Ring** requests and responses, middleware,
+  **Hiccup** previews rendered by `hiccup.core/html`, **HTMX** attributes, routing and
+  JSON, culminating in a live to-do app running as a real local Ring server.
 - **Course 3 — Regex · Master Regular Expressions:** 18 lessons taught through Clojure's
   regex tools (`re-find`, `re-seq`, `re-matches`, `str/replace`), covering everything from
   literals to lookarounds, named groups and a live **Regex Golf leaderboard**.
@@ -24,10 +25,9 @@ carries a per-launch token, and the server refuses foreign Host/Origin requests.
 ships its own fonts and assets; there is no CDN and no analytics.
 
 > **Migration status:** Phases 0 (JVM slice), 1 (Vite UI), 2 (runtime API + content
-> audit) and 3 (Clojure course on JVM semantics) are complete. The audit tracks 31 known
-> JavaScript-era examples in the Web Dev and Regex courses
-> (`frontend/content-audit-baseline.json`); they are migrated in Phases 4–5. Live Reagent
-> previews stay read-only until the Web Dev course is replaced. See
+> audit), 3 (Clojure course on JVM semantics) and 4 (JVM web course) are complete. The
+> audit tracks 19 known JavaScript-regex examples left in the Regex course
+> (`frontend/content-audit-baseline.json`); they are migrated in Phase 5. See
 > [docs/JVM_DESKTOP_MIGRATION_PLAN.md](docs/JVM_DESKTOP_MIGRATION_PLAN.md).
 
 ---
@@ -36,6 +36,10 @@ ships its own fonts and assets; there is no CDN and no analytics.
 
 - **Three courses in one UI** (74 lessons total) with a sidebar course switcher.
 - **Runnable, editable code** in every lesson — press **Run** (or `Ctrl/Cmd + Enter`).
+- **Live Hiccup previews** rendered by the real `hiccup.core/html` on the JVM and shown in
+  a sandboxed iframe.
+- **An interactive capstone** — a real Ring to-do app, served locally and driven by HTMX, in
+  an embedded iframe.
 - **Auto-checked exercises** that accept *any* correct solution, each evaluated in an
   isolated namespace in the worker JVM.
 - **Interactive REPL playground** with history and a keyboard-shortcut cheatsheet.
@@ -57,7 +61,8 @@ ships its own fonts and assets; there is no CDN and no analytics.
 - **CodeMirror 6** + [`@nextjournal/clojure-mode`](https://github.com/nextjournal/clojure-mode)
   for the editor (highlighting, structural editing, autocomplete)
 - **Tailwind CSS** + shadcn/ui components
-- **Clojure 1.12 on JDK 25**, `http-kit`, `cheshire`, packaged with `jpackage`
+- **Clojure 1.12 on JDK 25**, `http-kit`, `cheshire`, `hiccup`, packaged with `jpackage`
+- **HTMX 2** vendored for the live course-2 demo (no CDN at runtime)
 - **Yarn** for package management
 
 > The app has no remote backend, auth, or database. The loopback server is part of the
@@ -101,8 +106,8 @@ jobs and `lein uberjar` work from a plain checkout.
 cd frontend
 yarn build                 # production bundle
 yarn check:offline         # fails if the bundle references any external origin
-yarn check:semantics       # fails on JS interop forms left in the Clojure course
-yarn audit:content         # every snippet, exercise and cheat-sheet example in the worker
+yarn check:semantics       # fails on JS/ClojureScript forms in the Clojure and Web Dev courses
+yarn audit:content         # every snippet, Hiccup preview, exercise and cheat-sheet example
 yarn smoke                 # drives the real app in Chromium (needs a jar)
 
 cd ../desktop
@@ -112,18 +117,19 @@ node scripts/phase0_check.mjs --json /tmp/phase0.json
 
 `yarn smoke` accepts `--jar`, `--json`, and `--chrome PATH` (or `CHROME_PATH`); without a
 path it uses the browser Playwright expects. It checks all 74 lessons across the three
-courses, bundled fonts, theme/search/REPL/exercise behavior, and asserts zero console
-errors, page errors, failed requests, or external requests.
+courses, bundled fonts, theme/search/REPL/exercise behavior, runs a Hiccup preview in its
+sandboxed iframe, drives the capstone Ring app through an add and a toggle, and asserts
+zero console errors, page errors, failed requests, or external requests.
 
-`yarn check:semantics` scans every string in the Clojure course, including `read` blocks,
-prose and exercise tests that the runtime audit never executes, and fails on `js/`, `#js`,
-`clj->js`/`js->clj`, `.-length`, `cljs` and `catch :default`.
-`frontend/content-semantics-baseline.json` is empty since Phase 3; any new occurrence fails
-the check.
+`yarn check:semantics` scans every string in the Clojure and Web Dev courses, including
+`read` blocks, prose and exercise tests that the runtime audit never executes, and fails on
+`js/`, `#js`, `clj->js`/`js->clj`, `.-length`, `cljs`, `catch :default`, and the retired
+ClojureScript/Reagent/Scittle forms. `frontend/content-semantics-baseline.json` is empty
+since Phase 4; CI runs the check with `--strict`.
 
-`yarn audit:content` runs 230 lesson code blocks, 143 exercise solutions and 153 cheat-sheet
-examples in the worker. `frontend/content-audit-baseline.json` tracks the 31 known
-JavaScript-semantics failures left in the Web Dev and Regex courses (Phases 4–5); new
+`yarn audit:content` runs 237 lesson code blocks, 11 Hiccup previews, 149 exercise
+solutions and 150 cheat-sheet examples in the worker. `frontend/content-audit-baseline.json`
+tracks the 19 known JavaScript-regex failures left in the Regex course (Phase 5); new
 failures (or baseline entries that start passing) fail the check.
 `frontend/content-audit-values.json` pins the value and printed output of every passing
 snippet and cheat-sheet example, so content that runs but prints something different also
@@ -137,7 +143,8 @@ fails; refresh it with `--update-values` after reviewing the diff.
 frontend/
 ├── index.html                 # Vite entry (no CDN, no inline scripts)
 ├── vite.config.mjs            # @vitejs/plugin-react, alias @ -> src
-├── public/                    # fonts.css, theme-init.js, favicons, woff2 files
+├── public/                    # fonts.css, theme-init.js, favicons, woff2 files,
+│                              # vendor/htmx.min.js (Course 2 capstone)
 ├── scripts/
 │   ├── install-ui.mjs         # copy dist/ -> desktop/resources/public
 │   ├── check-offline.mjs      # fail the build on any external URL
@@ -150,14 +157,15 @@ frontend/
     ├── components/            # editor, snippets, REPL, exercises, search, ...
     ├── data/                  # lesson, exercise and cheat-sheet content
     └── lib/
-        ├── runtime.js         # HTTP transport to /api/eval and /api/exercise
+        ├── runtime.js         # HTTP transport to /api/eval, /api/hiccup and the live preview
         └── log.js             # dev-only logging helper
 
 desktop/
 ├── src/parens/main.clj        # launches the server and the worker
 ├── src/parens/api.clj         # token/Host/Origin-protected loopback API + static files
 ├── src/parens/runtime.clj     # owns the killable worker JVM
-├── src/parens/worker.clj      # evaluates code and exercises
+├── src/parens/worker.clj      # evaluates code, exercises and Hiccup previews
+├── src/parens/preview.clj     # the live Ring to-do app used by the course-2 capstone
 ├── resources/public/          # the built UI (generated by `yarn build:desktop`)
 ├── scripts/                   # packaging, signing, phase checkers
 └── test/                      # API security + worker recovery tests
@@ -170,8 +178,13 @@ desktop/
 - The launcher prints `http://127.0.0.1:<port>/#token=<secret>`; the UI reads the token
   from the fragment, stores it in `sessionStorage`, and rewrites the address bar to a
   shareable `?lesson=…` URL.
-- Every request to `/api/eval` or `/api/exercise` sends `X-Parens-Token`. The server also
-  validates Host, Origin, and `Sec-Fetch-Site` to block DNS rebinding and cross-site calls.
+- Every request to `/api/eval`, `/api/hiccup` or `/api/exercise` sends `X-Parens-Token`.
+  The server also validates Host, Origin, and `Sec-Fetch-Site` to block DNS rebinding and
+  cross-site calls.
+- Hiccup previews are rendered in the worker by the real `hiccup.core/html` and shown in a
+  sandboxed iframe. The capstone's live Ring app (`/preview/todos`) is served by the same
+  loopback server, uses a `SameSite=Strict` session cookie instead of the token, and is
+  driven by vendored HTMX.
 - Each course evaluates in its own namespace (`user`, `web`, `regex`), so definitions
   never leak between courses. `POST /api/set-ns` sets the default, and evals also send the
   namespace explicitly. Exercises run in a fresh, unique namespace per attempt.
@@ -217,7 +230,7 @@ That's it — the sidebar switcher, routing and progress tracking pick it up aut
 ## 📝 License
 
 This project uses a **dual license** that applies to **all three courses**
-(Parens · Learn Clojure, Hiccup · Web Dev with ClojureScript, and Regex ·
+(Parens · Learn Clojure, Hiccup · Web Dev with Clojure, and Regex ·
 Master Regular Expressions):
 
 - **Source code** — licensed under the [MIT License](./LICENSE).

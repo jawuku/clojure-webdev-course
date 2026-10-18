@@ -74,6 +74,24 @@
         (is (re-find #"caused by" (:error response)))
         (is (re-find #"No such namespace: js" (:error response)))))))
 
+(deftest hiccup-renders-through-the-real-library
+  (with-worker
+    (fn []
+      (let [response (runtime/render-hiccup
+                      "web"
+                      (str "(defn card [title] [:div.card [:h2 title]])\n"
+                           "(card \"Hi\")"))]
+        (is (true? (:ok response)) (:error response))
+        (is (= "<div class=\"card\"><h2>Hi</h2></div>" (:html response)))
+        (is (number? (:ms response)))))))
+
+(deftest hiccup-reports-errors-clearly
+  (with-worker
+    (fn []
+      (let [response (runtime/render-hiccup "web" "(js/Math.sqrt 16)")]
+        (is (false? (:ok response)))
+        (is (re-find #"No such namespace: js" (:error response)))))))
+
 (deftest exercises-run-in-fresh-namespaces
   (with-worker
     (fn []

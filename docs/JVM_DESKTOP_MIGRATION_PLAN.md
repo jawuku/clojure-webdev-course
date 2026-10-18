@@ -1,7 +1,7 @@
 # Parens Desktop — JVM + Vite Migration Plan
 
-Status: Phase 0 implemented and passing (see [`PHASE0_RESULTS.md`](PHASE0_RESULTS.md));
-Phases 1–7 are still a proposal.
+Status: Phases 0–4 implemented and passing (see [`PHASE0_RESULTS.md`](PHASE0_RESULTS.md)
+through [`PHASE4_RESULTS.md`](PHASE4_RESULTS.md)); Phases 5–7 are still a proposal.
 
 ## Decisions (recorded)
 
@@ -20,9 +20,9 @@ Phases 1–7 are still a proposal.
 The architecture stays portable to a real native webview later (Tauri/WebView2/WKWebView
 would wrap the same local server), so this choice does not close that door.
 
-## 1. Where the app is today
+## 1. Where the app started (before Phase 0)
 
-| Area | Current state |
+| Area | State at the start |
 | --- | --- |
 | UI | React 19, CRA + CRACO, CodeMirror 6 (`@nextjournal/clojure-mode`), Tailwind/shadcn |
 | Runtime | Scittle/SCI 0.7.27 from jsDelivr, plus React 18 UMD + Scittle Reagent from unpkg |
@@ -263,13 +263,22 @@ value/output; timeout recovery and token rejection are covered by tests; eval p9
 `catch :default` in the course (enforced by `yarn check:semantics --strict`, baseline empty);
 37 lessons run clean; 77 exercises pass.
 
-### Phase 4 — Course 2 replacement (~8 days)
+### Phase 4 — Course 2 replacement (~8 days) — **DONE**
+
+> Completed: Course 2 is now "Web Development with Clojure" — 19 lessons in five groups
+> covering web foundations, Ring requests/responses/middleware, Hiccup, HTMX, routing and
+> JSON, and a capstone that runs as a real Ring app. Hiccup blocks render through
+> `hiccup.core/html` in the worker and appear in a sandboxed iframe; the capstone is served
+> from `/preview/todos` by the local server (same-origin, `SameSite=Strict` cookie, vendored
+> htmx 2.0.11) and the browser smoke test drives an add and a toggle through it. `yarn
+> check:semantics --strict` reports 0 occurrences across the Clojure and Web Dev courses and
+> the audit has 0 Web Dev failures; eval p95 is 16.3 ms. See `PHASE4_RESULTS.md`.
 
 Build the Ring/Hiccup/HTMX course described in D4.
 
-**Acceptance:** 19 lessons; Hiccup previews render through `hiccup.core/html` in a sandboxed
-iframe; the capstone is interactive end-to-end on a local Ring app; no Reagent, React UMD,
-or Scittle anywhere.
+**Acceptance (met):** 19 lessons; Hiccup previews render through `hiccup.core/html` in a
+sandboxed iframe; the capstone is interactive end-to-end on a local Ring app; no Reagent,
+React UMD, or Scittle anywhere.
 
 ### Phase 5 — Regex → `java.util.regex` (~4 days)
 
@@ -363,10 +372,10 @@ phases. The 74-lesson audit is the long pole, not the backend.
 
 ## 8. Recommended next step
 
-**Phase 0 is done (PASS). Proceed to Phase 1 (Vite migration) and start the content audit
-harness in parallel.** The slice already provides the runtime API, so the frontend work is
-built against a real transport rather than a guess. The audit harness is independent and
-becomes the safety net for Phases 3–5, so it should not wait for the UI migration.
+**Phases 0–4 are done. Proceed to Phase 5 (Regex → `java.util.regex`).** The runtime
+contract is frozen and the audit harness now covers all three courses; the only remaining
+content debt is the 19 baselined JavaScript-regex examples. Phase 6 (persistence, offline,
+packaging) can run in parallel, and Phase 7 closes with the docs/release pass.
 
 Carry two items from Phase 0 into CI: an integration test for worker timeout/`System.exit`
 recovery, and the token/Host/Origin rejection tests, which are the security boundary for

@@ -202,6 +202,40 @@ export async function evalClojure(code) {
   }
 }
 
+/**
+ * Render a Hiccup form to HTML with hiccup.core/html in the worker JVM. This is
+ * the same library a real project uses, so the preview is the real output.
+ * Never throws.
+ */
+export async function renderHiccup(code) {
+  try {
+    const data = await api("/api/hiccup", { body: { code, ns: currentNs } });
+    return {
+      ok: data.ok === true,
+      html: data.html || "",
+      output: data.output || "",
+      error: data.ok === true ? null : data.error || "Rendering failed.",
+      ms: data.ms,
+    };
+  } catch (error) {
+    return { ok: false, html: "", output: "", error: describe(error) };
+  }
+}
+
+/**
+ * Start (or restart) the live Ring demo used by the capstone lesson. The server
+ * sets a SameSite=Strict session cookie for the iframe; this call needs the
+ * launch token, the iframe requests that follow use the cookie.
+ */
+export async function startPreview() {
+  try {
+    const data = await api("/api/preview/session", { body: {} });
+    return { ok: data.ok === true };
+  } catch (error) {
+    return { ok: false, error: describe(error) };
+  }
+}
+
 function onlyComments(code) {
   return code
     .split("\n")

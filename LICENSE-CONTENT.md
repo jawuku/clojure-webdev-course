@@ -11,7 +11,7 @@ courses** in this project — is licensed under the **Creative Commons Attributi
 This covers:
 
 1. **Parens — Learn Clojure**
-2. **Hiccup — Web Dev with ClojureScript**
+2. **Hiccup — Web Dev with Clojure**
 3. **Regex — Master Regular Expressions**
 
 Copyright (c) 2026 Jason Awuku
@@ -41,6 +41,6 @@ The full legal text is available at:
 
 ## Suggested attribution
 
-> "Parens — Learn Clojure & ClojureScript in the Browser" (including the Clojure,
-> Web Dev with ClojureScript, and Regex courses) by Jason Awuku, licensed under
+> "Parens — Learn Clojure, Web Development & Regex" (including the Clojure,
+> Web Dev with Clojure, and Regex courses) by Jason Awuku, licensed under
 > CC BY 4.0.

@@ -9,6 +9,7 @@
   (:require [cheshire.core :as json]
             [clojure.java.io :as io]
             [clojure.string :as str]
+            [parens.preview :as preview]
             [parens.runtime :as runtime])
   (:import [java.lang ProcessHandle]
            [java.nio.charset StandardCharsets]
@@ -27,6 +28,8 @@
        "img-src 'self' data:; "
        "font-src 'self'; "
        "connect-src 'self'; "
+       ;; Course 2 embeds the live Ring app (same origin) in an iframe.
+       "frame-src 'self'; "
        "base-uri 'none'; "
        "form-action 'none'; "
        "frame-ancestors 'none'"))
@@ -163,6 +166,30 @@
           :else
           (json-response 200 (runtime/eval-code (or ns (runtime/active-ns)) code)))))))
 
+(defn- hiccup-handler [request]
+  (let [{:keys [data error]} (read-body request)]
+    (if error
+      (body-error error)
+      (let [{:keys [code ns]} data]
+        (cond
+          (not (string? code))
+          (json-response 400 {:ok false :error "code must be a string."})
+
+          (> (count code) 200000)
+          (json-response 413 {:ok false :error "Code is too long."})
+
+          (and ns (not (valid-ns? ns)))
+          (json-response 400 {:ok false :error "Invalid namespace."})
+
+          :else
+          (json-response 200 (runtime/render-hiccup (or ns (runtime/active-ns)) code)))))))
+
+(defn- preview-session-handler [_request]
+  (let [id (preview/start-session!)]
+    (assoc-in (json-response 200 {:ok true})
+              [:headers "set-cookie"]
+              (preview/session-cookie id))))
+
 (defn- exercise-handler [request]
   (let [{:keys [data error]} (read-body request)]
     (if error
@@ -197,6 +224,12 @@
       (and (= request-method :post) (= uri "/api/eval"))
       (eval-handler request)
 
+      (and (= request-method :post) (= uri "/api/hiccup"))
+      (hiccup-handler request)
+
+      (and (= request-method :post) (= uri "/api/preview/session"))
+      (preview-session-handler request)
+
       (and (= request-method :post) (= uri "/api/exercise"))
       (exercise-handler request)
 
@@ -209,6 +242,11 @@
 (defn- wrap-security [handler token]
   (fn [request]
     (let [api? (str/starts-with? (:uri request) "/api/")
+          ;; The live preview carries a SameSite=Strict session cookie instead
+          ;; of the launch token: the iframe navigates without custom headers,
+          ;; and its HTMX requests are same-origin. Cross-site access is still
+          ;; blocked here, and preview/handler verifies the cookie itself.
+          preview? (str/starts-with? (:uri request) "/preview/")
           health? (= (:uri request) "/api/health")
           host (get-in request [:headers "host"])
           origin (get-in request [:headers "origin"])
@@ -217,6 +255,12 @@
       (cond
         (not (allowed-host? host))
         (text-response 403 "Forbidden host.")
+
+        (and preview? origin (not (allowed-origin? origin)))
+        (text-response 403 "Forbidden origin.")
+
+        (and preview? (not (allowed-fetch-site? fetch-site)))
+        (text-response 403 "Forbidden fetch site.")
 
         (and api? origin (not (allowed-origin? origin)))
         (text-response 403 "Forbidden origin.")
@@ -234,7 +278,9 @@
   "Build the secured handler. `token` must be the per-launch secret."
   [token]
   (let [handler (fn [request]
-                  (or (when (= :get (:request-method request))
+                  (or (when (str/starts-with? (:uri request) "/preview/")
+                        (preview/handler request))
+                      (when (= :get (:request-method request))
                         (static-response (:uri request)))
                       (api-handler request)))]
     (wrap-security handler token)))

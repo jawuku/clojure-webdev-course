@@ -1,5 +1,6 @@
 // Regular Expressions course — Part 3: Advanced Patterns + a Regex Golf challenge.
-// Verified against the V8/JS regex engine used by the Scittle runtime.
+// Verified against the V8/JS regex engine this course runs on (Phase 5 moves
+// the Regex course onto java.util.regex).
 
 export const regexPart3 = [
   {

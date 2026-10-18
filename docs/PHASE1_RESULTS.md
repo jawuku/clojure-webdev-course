@@ -1,5 +1,9 @@
 # Phase 1 — Vite migration: results
 
+> **Historical snapshot.** Course 2 was later replaced by the JVM Ring/Hiccup/HTMX course;
+> see [`PHASE4_RESULTS.md`](PHASE4_RESULTS.md) for current behavior. The Vite setup and
+> runtime transport described here are still current.
+
 **Status: PASS.** The Vite bundle is the UI the JVM app serves. It makes no external
 requests, renders all 74 lessons across the three courses, and evaluates code through the
 Phase 0 HTTP runtime instead of Scittle/SCI.
