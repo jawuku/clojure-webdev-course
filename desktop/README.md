@@ -512,12 +512,21 @@ bash scripts/require_release_secrets.sh windows
 Linux has no mandatory secrets: `require_release_secrets.sh` only covers the two
 modes above, and the Linux jobs publish checksums with or without a key.
 
-macOS signing imports the certificate into a throwaway keychain, signs every Mach-O
+macOS signing unpacks the `.p12` with openssl (which reads `APPLE_CERT_PASSWORD`
+from the environment, because `security import -P` would put it on the command
+line) and imports the resulting unencrypted PEM, kept `0600` and deleted as soon
+as the key is in a throwaway keychain. It signs every Mach-O
 file in the bundle (the app launcher, the worker launcher, and the bundled
 `bin/java`, which all host a JVM, get `packaging/entitlements.plist`), then signs the
 bundle with the hardened runtime and a secure timestamp. Notarization submits a
 `.app` as a zip, staples the bundle, and verifies it with `spctl`; the `.dmg` is then
 built from the stapled app, signed, notarized and stapled as well.
+
+The `macos-signing` job in `desktop-ci.yml` signs a throwaway bundle on a real
+macOS runner with a self-signed certificate, so the openssl-and-import path is
+exercised without an Apple account; it sets `CODESIGN_TIMESTAMP=` because Apple's
+timestamp service will not stamp a self-signed identity. That job proves the
+mechanism, not Gatekeeper trust — that still needs the Developer ID identity.
 
 ```bash
 bash scripts/sign_macos.sh target/jpackage/ParensPhase0.app
@@ -529,7 +538,13 @@ bash scripts/notarize_macos.sh target/dmg/*.dmg
 
 Windows signing uses `signtool` with SHA-256 and an RFC 3161 timestamp, then verifies
 each file with `signtool verify /pa` — the assessment SmartScreen and the installer
-make. The app-image launchers and the `.msi`/`.exe` installers are signed. jpackage
+make. The `.pfx` is imported into the current user's certificate store for the run
+and removed on exit, so `signtool` signs by thumbprint and `WINDOWS_CERT_PASSWORD`
+never appears on a command line. The app-image launchers and the `.msi`/`.exe`
+installers are signed. `scripts/check_signing_secrets.sh` re-checks that on every
+pull request for all three platforms: it runs the real signing scripts against
+fake tools (`uname`, `security`, `codesign`, `openssl`, `gpg`, `powershell.exe`,
+`signtool.exe`) and fails if any secret appears in a child's argv. jpackage
 builds a fresh app image for each installer, so the launchers inside an installed
 copy are not individually signed; the installer signature covers delivery.
 

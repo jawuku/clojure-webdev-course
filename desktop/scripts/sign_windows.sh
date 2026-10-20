@@ -5,12 +5,18 @@
 #
 # Requires:
 #   WINDOWS_CERT_PFX_BASE64  base64 of the code-signing .pfx
-#   WINDOWS_CERT_PASSWORD    password for that .pfx
+#   WINDOWS_CERT_PASSWORD    password for that .pfx; PowerShell reads it from
+#                            the environment, so it never reaches a command line
 #
 # Optional:
 #   SIGNTOOL                 path to signtool.exe (otherwise found in PATH or
 #                            the Windows 10/11 SDK)
 #   WINDOWS_TIMESTAMP_URL    RFC 3161 timestamp service
+#
+# The .pfx is imported into the current user's certificate store for the run and
+# removed again on exit; signtool then signs by thumbprint. signtool has no way
+# to read the password from a file or stdin, and `/p` would expose it to every
+# process on the machine, so this script never passes it on the command line.
 #
 # Each file is signed with SHA-256 and then verified with `signtool verify /pa`,
 # which is the check a user's SmartScreen/installer sees.
@@ -57,9 +63,49 @@ base64_decode() {
 }
 
 PFX="${TMPDIR:-/tmp}/parens-signing-$$.pfx"
+THUMBPRINT=""
+
+cleanup() {
+  rm -f "$PFX"
+  if [ -n "$THUMBPRINT" ]; then
+    # Drop the imported certificate and its private key again; the runner is
+    # ephemeral, but a developer's machine is not.
+    powershell.exe -NoProfile -NonInteractive -Command \
+      "Get-ChildItem -Path 'Cert:\\CurrentUser\\My\\${THUMBPRINT}' | Remove-Item -Force" \
+      >/dev/null 2>&1 || true
+  fi
+}
+trap cleanup EXIT
+
 printf '%s' "$WINDOWS_CERT_PFX_BASE64" | base64_decode > "$PFX"
 chmod 600 "$PFX"
-trap 'rm -f "$PFX"' EXIT
+
+# Import-PfxCertificate needs a Windows path and reads the password from the
+# environment, so neither the .pfx path nor the password appears in argv.
+if command -v cygpath >/dev/null 2>&1; then
+  PFX_PATH=$(cygpath -w "$PFX")
+else
+  PFX_PATH="$PFX"
+fi
+export PFX_PATH WINDOWS_CERT_PASSWORD
+
+if ! THUMBPRINT=$(powershell.exe -NoProfile -NonInteractive -Command '
+  $ErrorActionPreference = "Stop"
+  $secure = ConvertTo-SecureString -String $env:WINDOWS_CERT_PASSWORD -AsPlainText -Force
+  $certs = Import-PfxCertificate -FilePath $env:PFX_PATH -CertStoreLocation Cert:\CurrentUser\My -Password $secure
+  $signing = $certs | Where-Object { $_.HasPrivateKey } | Select-Object -First 1
+  if (-not $signing) { throw "The .pfx holds no certificate with a private key." }
+  $signing.Thumbprint
+' | tr -d '\r' | tail -1); then
+  echo "Could not import the code-signing certificate; check" >&2
+  echo "WINDOWS_CERT_PFX_BASE64 and WINDOWS_CERT_PASSWORD." >&2
+  exit 1
+fi
+if [ -z "$THUMBPRINT" ]; then
+  echo "The imported certificate has no thumbprint." >&2
+  exit 1
+fi
+echo "Using certificate $THUMBPRINT"
 
 for file in "$@"; do
   if [ ! -f "$file" ]; then
@@ -69,7 +115,7 @@ for file in "$@"; do
   echo "Signing $file"
   "$SIGNTOOL" sign \
     /fd SHA256 /td SHA256 /tr "$TIMESTAMP_URL" \
-    /f "$PFX" /p "$WINDOWS_CERT_PASSWORD" "$file"
+    /sha1 "$THUMBPRINT" "$file"
   "$SIGNTOOL" verify /pa /q "$file"
   echo "Verified $file"
 done

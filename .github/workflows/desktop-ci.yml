@@ -293,6 +293,105 @@ jobs:
           fi
           echo "Checksum and signature checks behaved as expected."
 
+  signing-secrets:
+    name: Signing scripts keep secrets out of argv
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v7
+
+      # The Windows .pfx password used to reach signtool through /p, where every
+      # process on the machine could read it. This runs each signing script
+      # against fakes and fails if its secret shows up in any child's argv, so
+      # the environment/fd/thumbprint paths cannot silently regress.
+      - name: No signing script passes a secret on a command line
+        run: bash scripts/check_signing_secrets.sh
+
+  macos-signing:
+    name: macOS signing with a throwaway certificate
+    # Proves the openssl -> unencrypted PEM -> `security import` path on a real
+    # macOS host. A self-signed certificate keeps this independent of an Apple
+    # developer account, so it cannot cover Gatekeeper trust; release signing
+    # still needs the APPLE_* secrets in desktop-release.yml.
+    runs-on: macos-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Sign and verify an app with a self-signed certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          WORK="$RUNNER_TEMP/macos-signing"
+          mkdir -p "$WORK"
+
+          # A code-signing certificate, self-signed, valid for a day. The config
+          # file form works with both LibreSSL (macOS /usr/bin/openssl) and
+          # OpenSSL.
+          cat > "$WORK/req.cnf" <<'EOF'
+          [req]
+          distinguished_name = dn
+          x509_extensions = v3
+          prompt = no
+          [dn]
+          CN = Parens Self-Signed Test
+          [v3]
+          basicConstraints = critical,CA:false
+          keyUsage = digitalSignature
+          extendedKeyUsage = codeSigning
+          EOF
+          openssl req -x509 -newkey rsa:2048 -nodes -days 1 \
+            -keyout "$WORK/key.pem" -out "$WORK/cert.pem" -config "$WORK/req.cnf" 2>/dev/null
+          openssl pkcs12 -export -inkey "$WORK/key.pem" -in "$WORK/cert.pem" \
+            -out "$WORK/cert.p12" -passout pass:selfsigned-test \
+            -name "Parens Self-Signed Test"
+
+          # The smallest bundle sign_macos.sh can sign: an Info.plist and one
+          # Mach-O executable. /bin/cp is a real Mach-O, so the nested-code walk
+          # has something to sign.
+          APP="$WORK/Parens.app"
+          mkdir -p "$APP/Contents/MacOS"
+          cp /bin/cp "$APP/Contents/MacOS/ParensPhase0"
+          cat > "$APP/Contents/Info.plist" <<'PLIST'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleIdentifier</key><string>example.parens.selfsigned</string>
+            <key>CFBundleExecutable</key><string>ParensPhase0</string>
+            <key>CFBundleName</key><string>Parens</string>
+            <key>CFBundlePackageType</key><string>APPL</string>
+          </dict>
+          </plist>
+          PLIST
+
+          APPLE_SIGNING_IDENTITY="Parens Self-Signed Test" \
+          APPLE_CERT_P12_BASE64="$(base64 < "$WORK/cert.p12" | tr -d '\n')" \
+          APPLE_CERT_PASSWORD="selfsigned-test" \
+          CODESIGN_TIMESTAMP= \
+            bash scripts/sign_macos.sh "$APP"
+
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign -dv --verbose=4 "$APP" 2>&1 |
+            grep -qF 'Authority=Parens Self-Signed Test'
+
+          # The throwaway keychain and the unencrypted PEM must be gone again.
+          if security list-keychains -d user | grep -q 'parens-signing'; then
+            echo "sign_macos.sh left its keychain in the search list" >&2
+            exit 1
+          fi
+          if ls "${TMPDIR:-/tmp}"/parens-signing-*.pem >/dev/null 2>&1; then
+            echo "sign_macos.sh left the unencrypted PEM behind" >&2
+            exit 1
+          fi
+          echo "Self-signed app signed and verified on macOS."
+
   app-image:
     name: Linux app-image (${{ matrix.os }})
     strategy:
