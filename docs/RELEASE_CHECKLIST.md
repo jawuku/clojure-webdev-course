@@ -59,9 +59,17 @@ Creation, export, publishing and rotation commands are in
 steps users follow are in
 [Verifying a signed release](../desktop/README.md#verifying-a-signed-release).
 
-**Release key:** none yet. Record the fingerprint here (and in the release
-notes) when the key is created; users compare it with
-`gpg --show-keys --with-fingerprint parens-release-key.asc`.
+**Release key** — `Parens releases <jawuku@users.noreply.github.com>`, created
+2026-10-20, expires 2028-10-19, passphrase-protected: signing needs
+`LINUX_GPG_PASSPHRASE` and fails rather than prompting without it.
+
+```
+6953 163A A328 002E 01D9  166F 39CC 9A29 063E 447B
+```
+
+Publish this grouped fingerprint in the release notes as well; users compare it
+with `gpg --show-keys --with-fingerprint parens-release-key.asc`. Record the new
+value here (and in the notes) after a rotation.
 
 ## 2. Manual install pass (per OS)
 

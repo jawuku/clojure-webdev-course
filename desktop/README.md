@@ -300,7 +300,7 @@ holds several, and `LINUX_GPG_PASSPHRASE` unlocks a protected one:
 
 ```bash
 export LINUX_GPG_PRIVATE_KEY_BASE64="$(base64 < parens-release-key.secret.asc | tr -d '\n')"
-export LINUX_GPG_PASSPHRASE="…"                 # omit for an unprotected key
+export LINUX_GPG_PASSPHRASE="<your passphrase>"  # omit for an unprotected key
 bash scripts/publish_linux.sh target/deb/*.deb
 ```
 
@@ -377,7 +377,7 @@ asset:
 gh secret set LINUX_GPG_PRIVATE_KEY_BASE64 < "$KEY_DIR/parens-release-key.b64"
 gh secret set LINUX_GPG_KEY_ID \
   --body "$(cat "$KEY_DIR/parens-release-key.fingerprint")"
-gh secret set LINUX_GPG_PASSPHRASE --body "…"   # only for a protected key
+gh secret set LINUX_GPG_PASSPHRASE   # paste it at the prompt; protected keys only
 ```
 
 Keep `parens-release-key.secret.asc` in an offline backup and delete the

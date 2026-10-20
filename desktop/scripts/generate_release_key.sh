@@ -239,7 +239,10 @@ echo "Next:"
 echo "  gh secret set LINUX_GPG_PRIVATE_KEY_BASE64 < $OUT_ABS/parens-release-key.b64"
 echo "  gh secret set LINUX_GPG_KEY_ID --body $FPR"
 if [ -n "$PASSPHRASE" ]; then
-  echo "  gh secret set LINUX_GPG_PASSPHRASE --body '…'   (the key is protected)"
+  # The passphrase is never printed. Left off the command line, `gh` prompts
+  # for the value, so it cannot be pasted by mistake and stays out of the
+  # shell history.
+  echo "  gh secret set LINUX_GPG_PASSPHRASE   # the key is protected: paste the passphrase at the prompt"
 else
   echo "  (the key has no passphrase; leave LINUX_GPG_PASSPHRASE unset)"
 fi

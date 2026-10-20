@@ -91,6 +91,12 @@ credentials.json
 .emergent/
 .gitconfig
 
+# Release signing material: the public key is a release asset, the secret half
+# must never be committed (see desktop/scripts/generate_release_key.sh).
+parens-release-key.secret.asc
+parens-release-key.b64
+parens-release-key.passphrase
+
 # my own artifacts
 freebuff-chat-*.md
 prompt.txt
