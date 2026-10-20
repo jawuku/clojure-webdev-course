@@ -5,8 +5,12 @@
 #
 # The directory holds a copy of every artifact plus SHA256SUMS, so a user can
 # download that directory's contents and run `sha256sum -c SHA256SUMS` with no
-# other files. The checksum file is verified against the copies before the
-# script exits: a SHA256SUMS that does not match its own packages never ships.
+# other files (macOS: `shasum -a 256 -c SHA256SUMS`). The checksum file is
+# verified against the copies before the script exits: a SHA256SUMS that does
+# not match its own packages never ships.
+#
+# Runs on Linux, macOS (/bin/bash 3.2) and Git Bash on Windows; the Linux
+# publisher, publish_linux.sh, adds an optional GPG signature on top.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -65,7 +69,14 @@ done
 # replaces the .asc when signing is enabled.
 rm -f "$OUT/SHA256SUMS" "$OUT/SHA256SUMS.asc"
 
-mapfile -t names < <(printf '%s\n' "${names[@]}" | LC_ALL=C sort)
+# Sort in the C locale so the file is identical regardless of the machine's
+# locale. bash 3.2 (macOS /bin/bash) has no mapfile, so read the sorted names
+# line by line instead.
+sorted=()
+while IFS= read -r name; do
+  sorted+=("$name")
+done < <(printf '%s\n' "${names[@]}" | LC_ALL=C sort)
+names=("${sorted[@]}")
 
 tmp=$(mktemp "$OUT/.SHA256SUMS.XXXXXX")
 trap 'rm -f "$tmp"' EXIT

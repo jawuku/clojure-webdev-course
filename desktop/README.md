@@ -265,21 +265,24 @@ Fedora 43 x86_64; see [`docs/PHASE0_RESULTS.md`](../docs/PHASE0_RESULTS.md). The
 `fedora-rpm` job in `.github/workflows/desktop-ci.yml` repeats the build, tests, and
 install check in a `fedora:43` container on GitHub Actions; it passes 31/31.
 
-## Linux checksums and signatures
+## Release checksums and signatures
 
-Every published Linux package ships with `SHA256SUMS`, and optionally a GPG
-signature over that file. One command produces both:
+Every published installer ships with `SHA256SUMS` next to it, and the Linux
+packages can additionally carry a GPG signature over that file:
 
 ```bash
-bash scripts/build_deb.sh                       # or scripts/build_rpm.sh
-bash scripts/publish_linux.sh target/deb/*.deb
+bash scripts/build_deb.sh                            # rpm, dmg, msi and exe too
+bash scripts/checksums.sh target/deb/*.deb           # unsigned checksums
+bash scripts/publish_linux.sh target/deb/*.deb       # Linux: plus GPG when a key is set
 ```
 
-`publish_linux.sh` copies the packages into `target/dist`, writes a sorted
+`checksums.sh` copies the artifacts into `target/dist`, writes a sorted
 `SHA256SUMS` with bare file names, and verifies it against the copies before
-exiting. `scripts/checksums.sh FILE...` is that step on its own (`--out DIR`
-changes the destination). The `.deb` and `.rpm` jobs in CI run the publisher, so
-the `parens-deb` and `parens-rpm` artifacts carry the package and its checksum.
+exiting. `--out DIR` changes the destination. It runs on Linux, macOS (which has
+no `sha256sum`, so it falls back to `shasum -a 256`) and Git Bash on Windows.
+`publish_linux.sh` wraps it for the Linux packages and adds the optional
+signature. The `.deb`, `.rpm`, `.dmg` and Windows jobs all publish
+`target/dist`, so each CI artifact holds the installer and its checksum.
 
 Verification needs no key:
 
@@ -288,12 +291,15 @@ cd target/dist
 sha256sum -c SHA256SUMS        # macOS: shasum -a 256 -c SHA256SUMS
 ```
 
+On Windows, Git Bash has `sha256sum`; without it, `certutil -hashfile
+<installer> SHA256` prints the hash to compare by eye.
+
 GPG signing is optional and off by default. Give the armored secret key in
 `LINUX_GPG_PRIVATE_KEY_BASE64`; `LINUX_GPG_KEY_ID` chooses a key when the block
 holds several, and `LINUX_GPG_PASSPHRASE` unlocks a protected one:
 
 ```bash
-export LINUX_GPG_PRIVATE_KEY_BASE64="$(base64 -w0 parens-signing-key.asc)"
+export LINUX_GPG_PRIVATE_KEY_BASE64="$(base64 < parens-release-key.secret.asc | tr -d '\n')"
 export LINUX_GPG_PASSPHRASE="…"                 # omit for an unprotected key
 bash scripts/publish_linux.sh target/deb/*.deb
 ```
@@ -301,18 +307,139 @@ bash scripts/publish_linux.sh target/deb/*.deb
 `scripts/sign_linux.sh` imports the key into a throwaway `GNUPGHOME` (never the
 caller's keyring), re-hashes the packages, writes the armored detached
 signature `SHA256SUMS.asc`, verifies it against the imported key, and prints the
-key fingerprint. The signature covers the checksum file, not each package, so a
-user checks the packages with `sha256sum -c` and the file's origin with:
+key fingerprint so it can be published. Without
+`LINUX_GPG_PRIVATE_KEY_BASE64`, `publish_linux.sh` publishes the checksums
+unsigned and says so. `desktop-release.yml` passes the secret to its Linux jobs
+when the repository has one; those jobs never fail for a missing key. The
+`linux-checksums` job in pull-request CI signs with a throwaway key both
+without and with a passphrase, so both code paths stay exercised.
+
+### Publishing the release key
+
+A signature only means something if users can check the key it came from, so
+the public key and its fingerprint are published separately from the download.
+
+The key is dedicated to releases (`sign` usage only) and is created once, then
+replaced on rotation. `generate_release_key.sh` creates it non-interactively in
+a throwaway keyring and writes every artifact below:
 
 ```bash
-gpg --import parens-signing-key.asc   # the release key, published with its fingerprint
-sha256sum -c SHA256SUMS
+bash scripts/generate_release_key.sh \
+  --name "Parens releases" --email releases@example.com \
+  --out "$HOME/parens-release-key"
+```
+
+| File | Used for |
+| --- | --- |
+| `parens-release-key.asc` | public key, attached to the release |
+| `parens-release-key.fingerprint` | the 40 hex-digit fingerprint |
+| `parens-release-key.secret.asc` | armored secret key, for the offline backup (0600) |
+| `parens-release-key.b64` | base64 secret key, for the CI secret (0600) |
+| `parens-release-key.rev.asc` | revocation certificate, ready to import (0600) |
+
+The key is `rsa4096` with `sign` usage and expires after `2y` by default
+(`--expire 1y`, `--expire 0` to override). Set `LINUX_GPG_PASSPHRASE` to protect
+it; the same value becomes the CI secret. Without it the key is unprotected,
+which is what `sign_linux.sh` expects when no passphrase is configured. The
+script verifies that the public export and the base64 secret both import back
+to the same fingerprint before moving anything into `--out`, and it refuses to
+replace existing files without `--force`.
+
+The script prints the fingerprint and records it in
+`parens-release-key.fingerprint`. Publish it grouped the way
+`gpg --fingerprint` prints it: it is the one value users must obtain through a
+channel other than the download itself, so it goes in the release notes and in
+[`docs/RELEASE_CHECKLIST.md`](../docs/RELEASE_CHECKLIST.md).
+
+The rest of this section assumes `KEY_DIR="$HOME/parens-release-key"`.
+
+Check the exported public key against the recorded fingerprint before
+publishing it:
+
+```bash
+gpg --show-keys --with-fingerprint "$KEY_DIR/parens-release-key.asc"
+# must print the fingerprint in "$KEY_DIR/parens-release-key.fingerprint"
+```
+
+Attach the public key to the GitHub release so users can fetch it next to the
+installers, and, optionally, upload it to a keyserver:
+
+```bash
+gh release upload desktop-v0.1.0 "$KEY_DIR/parens-release-key.asc"
+FPR=$(cat "$KEY_DIR/parens-release-key.fingerprint")
+gpg --keyserver hkps://keys.openpgp.org --send-keys "$FPR"
+```
+
+The base64 secret goes only into CI, never into the repository or a release
+asset:
+
+```bash
+gh secret set LINUX_GPG_PRIVATE_KEY_BASE64 < "$KEY_DIR/parens-release-key.b64"
+gh secret set LINUX_GPG_KEY_ID \
+  --body "$(cat "$KEY_DIR/parens-release-key.fingerprint")"
+gh secret set LINUX_GPG_PASSPHRASE --body "…"   # only for a protected key
+```
+
+Keep `parens-release-key.secret.asc` in an offline backup and delete the
+working copy once the secret is in CI; `--out` defaults to the git-ignored
+`target/release-key`, but the offline copy is what lets you sign locally later.
+
+`LINUX_GPG_KEY_ID` is optional when the secret block holds one key;
+`LINUX_GPG_PASSPHRASE` is required only for a protected key. The next
+`desktop-release.yml` run signs `SHA256SUMS`, and `sign_linux.sh` prints the
+fingerprint it used — compare that line with the published fingerprint.
+
+The script also writes `parens-release-key.rev.asc`, a revocation certificate
+with GnuPG's explanatory preamble and colon prefix already stripped, ready to
+import. Keep it offline. If the key is lost, leaked or superseded, merge the
+certificate and republish the now-revoked public key:
+
+```bash
+FPR=$(cat "$KEY_DIR/parens-release-key.fingerprint")
+gpg --import "$KEY_DIR/parens-release-key.rev.asc"
+gpg --armor --export "$FPR" > parens-release-key.asc
+gh release upload desktop-v0.1.0 parens-release-key.asc --clobber
+gpg --keyserver hkps://keys.openpgp.org --send-keys "$FPR"
+```
+
+Then create a new key with the same script, set the new secrets, and publish
+the new fingerprint. Keep the revoked public key available so old releases remain
+verifiable; rotate before the expiry date so new releases are signed by a
+current key.
+
+### Verifying a signed release
+
+Fetch the public key from the release and compare its fingerprint with the one
+published in the release notes before trusting it:
+
+```bash
+curl -fsSLO https://github.com/jawuku/clojure-webdev-course/releases/download/desktop-v0.1.0/parens-release-key.asc
+gpg --show-keys --with-fingerprint parens-release-key.asc
+# the printed 40 hex digits must match the published fingerprint
+```
+
+With the fingerprint matched, import the key and check the unpacked artifact
+directory:
+
+```bash
+gpg --import parens-release-key.asc
+cd target/dist
+sha256sum -c SHA256SUMS        # macOS: shasum -a 256 -c SHA256SUMS
 gpg --verify SHA256SUMS.asc SHA256SUMS
 ```
 
-Without `LINUX_GPG_PRIVATE_KEY_BASE64`, `publish_linux.sh` publishes the
-checksums unsigned and says so. `desktop-release.yml` passes the secret to its
-Linux jobs when the repository has one; those jobs never fail for a missing key.
+`gpg --verify` must report `Good signature` and print the key's fingerprint. An
+"untrusted" warning for the user ID is expected: the key is not certified by
+the web of trust, and the fingerprint comparison is what binds it to the
+project. `sha256sum -c` proves the packages match the checksum file; the
+signature proves the checksum file came from the holder of that key, so run
+both.
+
+GnuPG adds a warning when the key has expired or been revoked — a revoked key
+still reports the old signature as `Good signature`, followed by
+`WARNING: This key has been revoked by its owner!`. Treat either warning as a
+failed check: re-compare the fingerprint and look for a revocation notice in
+the release notes.
 
 ## macOS .dmg
 
@@ -423,10 +550,11 @@ Ubuntu 26.04, macOS (arm64), and Windows (x64), plus the `.deb` and `.rpm`; ever
 runs the same 31-check suite. The macOS job also builds a `.dmg`, installs the app
 into `/Applications`, and re-runs the checks against that copy. The Windows job
 builds an `.msi` and an `.exe`, installs each in turn, checks the installed launcher
-against the same 31 checks, and uninstalls it. Every Linux artifact ships a
-`SHA256SUMS`; the macOS and Windows app images and installers are unsigned here,
-and `desktop-release.yml` produces the signed and notarized ones plus the
-GPG-signed Linux checksums when the key is configured.
+against the same 31 checks, and uninstalls it. Every installer artifact — Linux,
+macOS and Windows — ships a `SHA256SUMS` in `target/dist`. macOS and Windows code
+signing happens only in `desktop-release.yml`; their checksums are never
+GPG-signed, so their authenticity comes from the platform signature, while the
+Linux checksums get a GPG signature there when the key is configured.
 
 ## Known limitations
 
@@ -440,7 +568,8 @@ GPG-signed Linux checksums when the key is configured.
 - Linux GPG signing has been exercised with throwaway keys, locally, only; no
   release key exists in the repository. Without
   `LINUX_GPG_PRIVATE_KEY_BASE64`, `SHA256SUMS` proves integrity, not who built
-  the package.
+  the package. The macOS and Windows `SHA256SUMS` files are never GPG-signed;
+  for them the code signature on the installer is the authenticity check.
 - No true sandbox; see above.
 - Timeout loses REPL/namespace state in the worker.
 - Direct writes to `System/out` (rather than `println`) can corrupt the worker

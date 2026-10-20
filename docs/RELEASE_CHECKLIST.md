@@ -16,9 +16,10 @@ Push the release commit and wait for both workflows:
   bundle check, offline check, content audit, semantics guard, and the browser
   smoke test on Ubuntu, macOS and Windows.
 
-All of these must be green before tagging. The Linux `.deb` and `.rpm` artifacts
-are `target/dist` directories holding the package, `SHA256SUMS`, and — when
-`.github/workflows/desktop-release.yml` has a GPG key — `SHA256SUMS.asc`.
+All of these must be green before tagging. Every installer artifact is a
+`target/dist` directory holding the installer and `SHA256SUMS`; the Linux
+`.deb`/`.rpm` artifacts add `SHA256SUMS.asc` when
+`.github/workflows/desktop-release.yml` has a GPG key.
 
 The macOS and Windows signing jobs in `desktop-release.yml` need these
 repository secrets:
@@ -31,21 +32,49 @@ repository secrets:
 | `LINUX_GPG_PRIVATE_KEY_BASE64` | optional — GPG signature over the Linux `SHA256SUMS` |
 | `LINUX_GPG_KEY_ID`, `LINUX_GPG_PASSPHRASE` | optional — key selection and passphrase |
 
-Without them, builds are unsigned: macOS Gatekeeper and Windows SmartScreen
-will warn on first launch, and the Linux packages ship an unsigned
-`SHA256SUMS`. That is acceptable for a development build, not for a public
-release.
+Without them, installers are unsigned: macOS Gatekeeper and Windows SmartScreen
+will warn on first launch, and the Linux `SHA256SUMS` has no GPG signature. The
+macOS and Windows `SHA256SUMS` files are always unsigned; for them the code
+signature on the installer carries authenticity. That is acceptable for a
+development build, not for a public release.
+
+### Release key
+
+The Linux jobs sign `SHA256SUMS` only when `LINUX_GPG_PRIVATE_KEY_BASE64` is
+set. Before the first signed release, and after every rotation:
+
+1. Create a dedicated signing key with
+   `bash scripts/generate_release_key.sh --name … --email … --out …`, attach
+   `parens-release-key.asc` to the `desktop-v*` release, and record the
+   fingerprint in the release notes and below.
+2. Store the armored secret key, base64-encoded, as
+   `LINUX_GPG_PRIVATE_KEY_BASE64`, plus `LINUX_GPG_KEY_ID` and, for a protected
+   key, `LINUX_GPG_PASSPHRASE`. Never commit the secret half or attach it to a
+   release.
+3. Run `desktop-release.yml` and confirm the fingerprint printed by
+   `sign_linux.sh` in the job log matches the published one.
+
+Creation, export, publishing and rotation commands are in
+[`desktop/README.md`](../desktop/README.md#publishing-the-release-key); the
+steps users follow are in
+[Verifying a signed release](../desktop/README.md#verifying-a-signed-release).
+
+**Release key:** none yet. Record the fingerprint here (and in the release
+notes) when the key is created; users compare it with
+`gpg --show-keys --with-fingerprint parens-release-key.asc`.
 
 ## 2. Manual install pass (per OS)
 
 Use a machine or VM that has never had Parens installed. For each target:
 
-1. Download the installer from the workflow run and verify it before installing.
-   For Linux, take the whole artifact directory (package, `SHA256SUMS`, and
-   `SHA256SUMS.asc` when signed) and run `sha256sum -c SHA256SUMS`; with a
-   signature, first import the release key and run
-   `gpg --verify SHA256SUMS.asc SHA256SUMS`. The macOS and Windows artifacts
-   publish no checksum file yet, so this step cannot be completed for them.
+1. Download the whole artifact directory from the workflow run and verify it
+   before installing: it holds the installer and `SHA256SUMS`. Run
+   `sha256sum -c SHA256SUMS` (`shasum -a 256 -c SHA256SUMS` on macOS; on
+   Windows without Git Bash, `certutil -hashfile <installer> SHA256`). For
+   Linux with a signature, fetch `parens-release-key.asc` from the release,
+   compare its fingerprint with the published one, import it, then run
+   `gpg --verify SHA256SUMS.asc SHA256SUMS` and confirm `gpg` prints that same
+   fingerprint.
 2. Install it the normal way (double-click `.dmg`/`.msi`/`.exe`, or
    `sudo apt install ./parens_*.deb` / `sudo dnf install ./parens-*.rpm`).
 3. Launch from the desktop menu or applications folder:
@@ -78,10 +107,13 @@ silicon and Intel if both are built), and Windows (`.msi` and `.exe`).
 ## 3. Known limitations to state in the release notes
 
 - No code-signing certificates in CI means unsigned builds unless the secrets
-  above are configured. Only the Linux packages publish a checksum, and its
-  GPG signature is optional: without `LINUX_GPG_PRIVATE_KEY_BASE64`,
-  `SHA256SUMS` proves the download is intact, not who built it. macOS and
-  Windows installers have no published checksum.
+  above are configured. Every installer publishes a `SHA256SUMS`, but only the
+  Linux one can be GPG-signed, and that signature is optional: without
+  `LINUX_GPG_PRIVATE_KEY_BASE64`, `SHA256SUMS` proves the download is intact,
+  not who built it. The macOS and Windows checksums are never GPG-signed;
+  check their code signature instead (`codesign -dv --verbose=4`,
+  `signtool verify /pa`). The Linux signature is only meaningful when users
+  compare the key fingerprint with the one published in the release notes.
 - The evaluator is a child JVM with a timeout and a temp working directory, not
   a security sandbox; it is intended for the learner's own code on their own
   machine.

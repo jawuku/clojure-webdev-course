@@ -8,6 +8,10 @@ name: Desktop release
 # The Linux jobs are the exception: GPG signing is optional there. Without
 # LINUX_GPG_PRIVATE_KEY_BASE64 they publish the package and its SHA256SUMS
 # unsigned rather than failing, because checksums are useful without a key.
+#
+# Every job publishes a target/dist directory holding the installer and its
+# SHA256SUMS. The macOS and Windows checksums are never GPG-signed: they cover
+# the signed bytes, and the platform code signature carries authenticity.
 
 on:
   workflow_dispatch:
@@ -120,12 +124,17 @@ jobs:
       - name: Notarize and staple .dmg
         run: bash scripts/notarize_macos.sh target/dmg/*.dmg
 
-      - name: Upload .dmg
+      # Hash the notarized .dmg: signing and stapling change the bytes, so this
+      # must run after the last step that touches the file.
+      - name: Publish .dmg with SHA256SUMS
+        run: bash scripts/checksums.sh target/dmg/*.dmg
+
+      - name: Upload signed .dmg with SHA256SUMS
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: parens-dmg-signed
-          path: desktop/target/dmg/*.dmg
+          path: desktop/target/dist/*
           if-no-files-found: ignore
 
       - name: Upload macOS release check results
@@ -209,6 +218,12 @@ jobs:
         shell: bash
         run: bash scripts/sign_windows.sh target/msi/*.msi target/exe/*.exe
 
+      # Authenticode has already been applied; the checksum covers the exact
+      # signed bytes that are installed and uploaded below.
+      - name: Publish installers with SHA256SUMS
+        shell: bash
+        run: bash scripts/checksums.sh target/msi/*.msi target/exe/*.exe
+
       - name: Install signed .msi
         shell: pwsh
         run: |
@@ -271,14 +286,12 @@ jobs:
             if ($exe -and (Test-Path $exe)) { throw "uninstall left $exe behind" }
           }
 
-      - name: Upload signed installers
+      - name: Upload signed installers with SHA256SUMS
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: parens-windows-signed
-          path: |
-            desktop/target/msi/*.msi
-            desktop/target/exe/*.exe
+          path: desktop/target/dist/*
           if-no-files-found: ignore
 
       - name: Upload Windows release check results

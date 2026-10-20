@@ -3,3 +3,8 @@
 *.log
 /.lein-failures
 /.lein-repl-history
+
+# Release signing material: the public key is published as a release asset, the
+# secret half must never be committed.
+/parens-release-key.secret.asc
+/parens-release-key.b64
